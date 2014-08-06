@@ -1,0 +1,21 @@
+{
+  "name": "dull",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "async": "^0.9.0",
+    "hashring": "^2.0.1",
+    "leveldown": "^0.10.2",
+    "levelup": "^0.18.6",
+    "logfmt": "^1.1.2",
+    "multilevel-http": "0.0.2",
+    "optimist": "^0.6.1",
+    "request": "^2.39.0"
+  }
+}
