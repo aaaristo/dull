@@ -5,7 +5,7 @@ Playing around with multilevel-http and node-hashring to better understand riak
 
 
 ```sh
-$ git clone 
+$ git clone git@github.com:aaaristo/dull.git
 $ nodemon index #--port 3000 --path ./data/dull.db
 $ nodemon index --port 3001 --path ./data/dull.db1
 $ nodemon index --port 3002 --path ./data/dull.db2
