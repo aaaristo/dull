@@ -14,4 +14,7 @@ $ nodemon recluster
 $ curl -X PUT -d '{ "name": "Andrea", "lastname": "Gariboldi", age: 33 }' -H 'Content-Type: application/json' http://localhost:3002/dull/data/andrea
 $ curl http://localhost:3001/dull/data/andrea?r=2
 $ curl -X DELETE http://localhost:3000/dull/data/andrea
+$ nodemon index --port 3004 --path ./data/dull.db4
+$ curl -X POST -d '127.0.0.1:3004' http://localhost:3000/dull/node
+$ curl -X DELETE -d '127.0.0.1:3002' http://localhost:3000/dull/node
 ```
