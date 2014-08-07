@@ -6,11 +6,11 @@ var mw= require('./middleware'),
 
 module.exports= function (app,node)
 {
-    var resolveErrors= function (errors, res, wr)
+    var resolveErrors= function (errors, res, wr, put)
         {
               var uerr= _.groupBy(errors,function (err)
                         {
-                            if (err.err.indexOf('NotFoundError') > -1)
+                            if (err.statusCode == 404 || err.err.indexOf('NotFoundError') > -1)
                               return 'notfound';
                             else
                               return 'error';
@@ -29,7 +29,7 @@ module.exports= function (app,node)
                      if (errs.length==max)
                      {
                        if (type=='notfound')
-                         res.send(404,'key not found');
+                         res.send(404,put ? 'bucket not found' : 'key not found');
                        else
                          res.send(500,errors);
 
@@ -38,7 +38,7 @@ module.exports= function (app,node)
                  });
         };
 
-    app.put('/dull/data/:key', mw.log, mw.text, function (req,res)
+    app.put('/dull/data/:bucket/:key', mw.text, function (req,res)
     {
         var w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,node.cap.n),
@@ -53,33 +53,31 @@ module.exports= function (app,node)
         else
         if (nodes.length < w)
           res.send(500,'we have only '+nodes.length+' nodes active, and you specified w='+w);
-
+        else
         async.forEach(nodes,
         function (node,done)
         {
-
-            multilevel.client('http://'+node+'/')
-            .put(req.params.key,req.text,function (err,value)
+            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
+            .put(req.params.key,req.text,function (err,res)
             {
                if (err)
-                 errors.push({ node: node, err: err });
+                 errors.push({ node: node, err: err, statusCode: res.statusCode });
                else
                  success();
 
                done();
             });
-
         },
         function ()
         {
            if (errors.length > (node.cap.n-w))
-             res.send(500,errors);
+             resolveErrors(errors,res,w,true);
            else
              console.log('put success'); 
         });
     });
 
-    app.get('/dull/data/:key', mw.log, function (req, res)
+    app.get('/dull/data/:bucket/:key', function (req, res)
     {
         var r= req.query.r || node.cap.r,
             nodes= node.ring.range(req.params.key,node.cap.n),
@@ -91,15 +89,15 @@ module.exports= function (app,node)
         else
         if (nodes.length < r)
           res.send(500,'we have only '+nodes.length+' nodes active, and you specified r='+r);
-
+        else
         async.forEach(nodes,
         function (node,done)
         {
-            multilevel.client('http://'+node+'/')
-            .get(req.params.key,function (err,value)
+            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
+            .get(req.params.key,function (err,value,resp)
             {
                if (err)
-                 errors.push({ node: node, err: err });
+                 errors.push({ node: node, err: err, statusCode: resp.statusCode });
                else
                  values.push(value);
 
@@ -142,7 +140,7 @@ module.exports= function (app,node)
         });
     });
 
-    app.delete('/dull/data/:key', mw.log, function (req,res)
+    app.delete('/dull/data/:bucket/:key', function (req,res)
     {
         var w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,node.cap.n),
@@ -157,15 +155,15 @@ module.exports= function (app,node)
         else
         if (nodes.length < w)
           res.send(500,'we have only '+nodes.length+' nodes active, and you specified w='+w);
-
+        else
         async.forEach(nodes,
         function (node,done)
         {
-            multilevel.client('http://'+node+'/')
-            .del(req.params.key,function (err,value)
+            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
+            .del(req.params.key,function (err,value,resp)
             {
                if (err)
-                 errors.push({ node: node, err: err });
+                 errors.push({ node: node, err: err, statusCode: resp.statusCode });
                else
                  success();
 

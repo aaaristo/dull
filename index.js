@@ -1,15 +1,19 @@
 var argv= require('optimist').argv, 
-    levelup = require('levelup'),
     _= require('underscore'),
-    HashRing = require('hashring');
+    mw= require('./server/middleware'),
+    express= require('express');
 
-var node= _.defaults(argv,{ host: '127.0.0.1', port: 3000, path: './data/dull.db', cap: { n: 3, w: 2, r: 2 } }),
-    app = require('multilevel-http').server(levelup(node.path, {valueEncoding: 'json'}));
+var node= _.defaults(argv,{ host: '127.0.0.1', port: 3000, path: './data', cap: { n: 3, w: 2, r: 2 } }),
+    bucket= require('./server/bucket'), 
+    app = express();
 
 node.string= [node.host,node.port].join(':');
-node.ring= new HashRing(node.string);
+
+app.use(mw.log);
+app.use(bucket.mount(app,node));
 
 require('./server/ring')(app,node);
+bucket(app,node);
 require('./server/data')(app,node);
 
 app.listen(node.port,node.host);

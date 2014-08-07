@@ -6,13 +6,18 @@ var mw= require('./middleware'),
 
 module.exports= function (app,node)
 {
-
     var nodes= function ()
         {
            return _.pluck(node.ring.continuum().servers,'string');
+        },
+        rering= function (nodes)
+        {
+           node.ring= new HashRing(nodes);
         };
+
+    rering(node.string);
     
-    app.get('/dull/node', function (req, res)
+    app.get('/dull/nodes', function (req, res)
     {
         res.send(nodes());
     });
@@ -28,14 +33,14 @@ module.exports= function (app,node)
                request.post
                ({
                   headers: {'Content-Type': 'application/json'},
-                  url:     'http://'+node+'/dull/coord/nodes',
+                  url:     'http://'+node+'/nodes',
                   body:    JSON.stringify(all)
                },done);
            else
                request.post
                ({
                   headers: {'Content-Type': 'text/plain'},
-                  url:     'http://'+node+'/dull/coord/node',
+                  url:     'http://'+node+'/node',
                   body:    req.text
                },done);
         },
@@ -53,7 +58,7 @@ module.exports= function (app,node)
         async.forEach(nodes(),
         function (node,done)
         {
-           request.del('http://'+node+'/dull/coord/node/'+req.params.node,done);
+           request.del('http://'+node+'/node/'+req.params.node,done);
         },
         function (err)
         {
@@ -64,25 +69,25 @@ module.exports= function (app,node)
         });
     });
 
-    app.post('/dull/coord/node', mw.text, function (req,res)
+    app.post('/node', mw.text, function (req,res)
     {
             console.log('adding node',req.text);
             node.ring.add(req.text);
             res.end();    
     });
 
-    app.post('/dull/coord/nodes', mw.json, function (req,res)
-    {
-            console.log('setting nodes',req.json);
-            node.ring= new HashRing(req.json);
-            res.end();    
-    });
-
-    app.delete('/dull/coord/node/:node', function (req,res)
+    app.delete('/node/:node', function (req,res)
     {
             console.log('deleting node',req.params.node);
             node.ring.remove(req.params.node);
             res.end();
+    });
+
+    app.post('/nodes', mw.json, function (req,res)
+    {
+            console.log('setting nodes',req.json);
+            rering(req.json);
+            res.end();    
     });
 
 };
