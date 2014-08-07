@@ -13,6 +13,7 @@ app.use(mw.log);
 app.use(bucket.mount(app,node));
 
 require('./server/ring')(app,node);
+require('./server/swim')(app,node);
 bucket(app,node);
 require('./server/data')(app,node);
 

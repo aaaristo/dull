@@ -1,6 +1,5 @@
 var mw= require('./middleware'),
     async= require('async'),
-    request= require('request'),
     multilevel= require('multilevel-http'),
     _= require('underscore');
 
