@@ -8,19 +8,26 @@ var _= require('underscore'),
 // @see http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
         http://www.cs.ucsb.edu/~ravenben/classes/papers/aodv-wmcsa99.pdf
 
-const T1= 3000,               // period length
-      PING_TIMEOUT= 1000,     // timeout of a ping request
-      FAILING_TIMEOUT= 9000,  // timeout of a suspected state before failing a node
-      k= 2,                   // number of random nodes to select for a ping-req
-      lambda= 2,              // parameter to tune maximum piggybacking of messages (keep it "small")
-      MAX_MESSAGES= 10;       // max piggybacked messages per request
-
-if (PING_TIMEOUT*3>T1) throw('quote: "which is chosen smaller than the protocol period...'+
-                             'Note that the protocol period has to be at least three times'+
-                             ' the round-trip estimate"');
-
-module.exports= function (app,node)
+module.exports= function (app,node,opts)
 {
+    opts= _.defaults(opts,{ swim_period_length: 3000,
+                            swim_ping_timeout: 1000,
+                            swim_failing_timeout: 9000,
+                            swim_pingreq_nodes: 2,
+                            swim_tune_gossip: 2,
+                            swim_gossip_messages: 10 });
+
+    var T1= opts.swim_period_length,                  // period length
+        PING_TIMEOUT= opts.swim_ping_timeout,         // timeout of a ping request
+        FAILING_TIMEOUT= opts.swim_failing_timeout,   // timeout of a suspected state before failing a node
+        k= opts.swim_pingreq_nodes,                   // number of random nodes to select for a ping-req
+        lambda= opts.swim_tune_gossip,                // tune maximum message retransmission (keep it "small")
+        MAX_MESSAGES= opts.swim_gossip_messages;      // max piggybacked messages per request
+
+    if (PING_TIMEOUT*3>T1) throw('quote: "which is chosen smaller than the protocol period...'+
+                                 'Note that the protocol period has to be at least three times'+
+                                 ' the round-trip estimate"');
+
     // todo:
     // adapt ping_timeout avg(response time)
 
@@ -258,7 +265,7 @@ module.exports= function (app,node)
            var Mj= pingStack.pop();
 
            if (!Mj)
-             Mj= (pingStack= _.shuffle(ring.nodes())).pop();
+             Mj= (pingStack= _.shuffle(_.without(ring.nodes(),node.string))).pop();
 
            console.log('swim','period',periodSeq,Mj);
 

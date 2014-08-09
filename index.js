@@ -12,7 +12,7 @@ node.string= [node.host,node.port].join(':');
 app.use(mw.log);
 app.use(bucket.mount(app,node));
 
-require('./server/swim')(app,node);
+require('./server/swim')(app,node,argv);
 bucket(app,node);
 require('./server/data')(app,node);
 
