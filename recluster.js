@@ -9,10 +9,10 @@ var nodes= ['127.0.0.1:3001', '127.0.0.1:3002', '127.0.0.1:3003'];
     {
         var first= nodes[0];
 
-        async.forEachSeries(nodes.splice(1),
+        async.forEach(nodes.slice(1),
         function (node, done)
         {
-           request.post({ url: 'http://'+first+'/dull/node', body: node },done);
+           request.post({ url: 'http://'+node+'/dull/join/'+first },done);
         },
         function (err)
         {

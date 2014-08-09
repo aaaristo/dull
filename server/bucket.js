@@ -1,4 +1,5 @@
 var mw= require('./middleware'),
+    ut= require('./util'),
     async= require('async'),
     multilevel= require('multilevel-http'),
     _= require('underscore');
@@ -79,19 +80,10 @@ module.exports.mount= function (app,node)
             else
             if (req.method=='DELETE')
             {
-              var torm= [],
-                  rmRoute= function (r)
-                  {
-                     app._router.stack.splice(app._router.stack.indexOf(r),1);
-                  };
-
-              app._router.stack.forEach(function (r)
+              ut.rmf(app._router.stack,function (r)
               {
-                 if (r.route&&r.route.path.indexOf('/mnt/'+bucket+'/')==0)
-                   torm.push(r); 
+                 return (r.route&&r.route.path.indexOf('/mnt/'+bucket+'/')==0);
               });
-
-              torm.forEach(rmRoute); 
 
               node.buckets.open[bucket].close(console.log); 
             }
