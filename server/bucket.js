@@ -16,7 +16,7 @@ module.exports= function (app,node)
 
            db.readStream().on('data',function (data)
            {
-               var bucket= { name: data.key, opts: JSON.parse(data.value) };
+               var bucket= { name: data.key, opts: ut.json(data.value) };
 
                node.buckets.open[bucket.name]= multilevel.server(node.path+'/'+bucket.name,{ base: '/mnt/'+bucket.name },app).db;
            });
@@ -26,69 +26,40 @@ module.exports= function (app,node)
 
     init(s.db);
 
-    app.put('/dull/bucket/:bucket', mw.text, function (req,res)
+    node.swim.on('bucket_put',function (bucket)
     {
-        async.forEach(nodes(),
-        function (node,done)
+        node.buckets.db.put(bucket.name, JSON.stringify(bucket.opts), function (err)
         {
-               multilevel.client('http://'+node+'/buckets/')
-               .put(req.params.bucket,req.text,done);
-        },
-        function (err)
-        {
-           if (err)
-             res.send(500,err);
-           else
-             res.end()
+             if (err) return console.log(err);
+
+             if (!_.filter(app._router.stack,
+                 function (r) { return r.route&&r.route.path=='/mnt/'+bucket.name+'/data'; })[0])
+               node.buckets.open[bucket.name]= multilevel
+                    .server(node.path+'/'+bucket.name,{ base: '/mnt/'+bucket.name },app).db;
         });
+    });
+
+    node.swim.on('bucket_delete',function (bucket)
+    {
+        // node.buckets.db del
+        ut.rmf(app._router.stack,function (r)
+        {
+             return (r.route&&r.route.path.indexOf('/mnt/'+bucket+'/')==0);
+        });
+
+        node.buckets.open[bucket].close(console.log); 
+    });
+
+    app.put('/dull/bucket/:bucket', mw.json, function (req,res)
+    {
+        node.swim.send('bucket_put',{ name: req.params.bucket, opts: req.json });
+        res.end();
     });
 
     app.delete('/dull/bucket/:bucket', function (req,res)
     {
-        async.forEach(nodes(),
-        function (node,done)
-        {
-             multilevel.client('http://'+node+'/buckets/')
-             .del(req.params.bucket,done);
-        },
-        function (err)
-        {
-           if (err)
-             res.send(500,err);
-           else
-             res.end()
-        });
+        node.swim.send('bucket_delete',req.params.bucket);
+        res.end();
     });
 
-};
-
-module.exports.mount= function (app,node)
-{
-    return function (req,res,next)
-    {
-       // /buckets/data/:bucket
-       if (req.originalUrl.indexOf('/buckets/data/')==0)
-       {
-            var bucket= req.originalUrl.substring('/buckets/data/'.length).split('?')[0];
-            console.log(req.method,bucket);
-
-            if (_.contains(['POST','PUT'],req.method))
-            {
-              if (!_.filter(app._router.stack,function (r) { return r.route&&r.route.path=='/mnt/'+bucket+'/data'; })[0])
-                node.buckets.open[bucket]= multilevel.server(node.path+'/'+bucket,{ base: '/mnt/'+bucket },app).db;
-            }
-            else
-            if (req.method=='DELETE')
-            {
-              ut.rmf(app._router.stack,function (r)
-              {
-                 return (r.route&&r.route.path.indexOf('/mnt/'+bucket+'/')==0);
-              });
-
-              node.buckets.open[bucket].close(console.log); 
-            }
-       }
-
-       next();
-    };
 };

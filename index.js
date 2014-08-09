@@ -10,7 +10,6 @@ var node= _.defaults(argv,{ host: '127.0.0.1', port: 3000, path: './data', cap: 
 node.string= [node.host,node.port].join(':');
 
 app.use(mw.log);
-app.use(bucket.mount(app,node));
 
 require('./server/swim')(app,node,argv);
 bucket(app,node);

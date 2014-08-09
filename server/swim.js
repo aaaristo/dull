@@ -3,6 +3,7 @@ var _= require('underscore'),
     ut= require('./util'),
     async= require('async'),
     request= require('request'),
+    EventEmitter= require('events').EventEmitter,
     HashRing = require('hashring');
 
 // @see http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
@@ -32,6 +33,7 @@ module.exports= function (app,node,opts)
     // adapt ping_timeout avg(response time)
 
     node.ring= new HashRing();
+    node.swim= new EventEmitter();
 
     var periodSeq= 0,
         incSeq= 0,
@@ -118,7 +120,10 @@ module.exports= function (app,node,opts)
 
               console.log('swim','receive',message);
 
-              receive[message.type](message.subject,message.inc);
+              if (message.emit!==undefined)
+                node.swim.emit(message.type,message.emit);
+              else 
+                receive[message.type](message.subject,message.inc);
 
               membershipUpdates.unshift({ message: message, counter: 0 });
            });
@@ -139,17 +144,6 @@ module.exports= function (app,node,opts)
 
            return _.keys(nodes);
         },
-        json= function (x)
-        {
-            try
-            {
-               return JSON.parse(x); 
-            }
-            catch (ex)
-            {
-               return {};
-            }
-        },
         ping= function (node,seq,cb)
         {
                request.post({ timeout: PING_TIMEOUT,
@@ -161,9 +155,9 @@ module.exports= function (app,node,opts)
                      cb(err);
                    else
                    if (res.statusCode!=200)
-                     cb({ code: res.statusCode, message: processMessages(json(body)) });
+                     cb({ code: res.statusCode, message: processMessages(ut.json(body)) });
                    else
-                     cb(null,processMessages(json(body)));
+                     cb(null,processMessages(ut.json(body)));
                });
         },
         pingReq= function (node,target,seq,cb)
@@ -177,24 +171,28 @@ module.exports= function (app,node,opts)
                      cb(err);
                    else
                    if (res.statusCode!=200)
-                     cb({ code: 200, message: res.statusCode < 300 ? processMessages(json(body)) : body });
+                     cb({ code: 200, message: res.statusCode < 300 ? processMessages(ut.json(body)) : body });
                    else
-                     cb(null,processMessages(json(body)));
+                     cb(null,processMessages(ut.json(body)));
                });
+        },
+        enqueueMessage= function (m)
+        {
+               var upd={ message: m, counter: 0 };
+
+               membershipUpdates.unshift(upd);
+
+               console.log('swim','send',upd.message);
         },
         sendMessage= function (type,subject)
         {
-               var upd, server= ring.find(subject);
+               var server= ring.find(subject);
 
                if (subject!=node.string&&!server) return;
 
-               membershipUpdates.unshift(upd={ message: { source: node.string, id: messageSeq++,
-                                                        type: type, subject: subject,
-                                                         inc: subject==node.string ? 
-                                                             incSeq++ : server.inc },
-                                           counter: 0 });
-
-               console.log('swim','send',upd.message);
+               enqueueMessage({ source: node.string, id: messageSeq++,
+                                  type: type, subject: subject,
+                                  inc: subject==node.string ? incSeq++ : server.inc });
         },
         receive= {
             join: function (subject,inc)
@@ -343,4 +341,9 @@ module.exports= function (app,node,opts)
         res.send(ring.nodes());
     });
 
+    node.swim.send= function (event,message)
+    {
+       enqueueMessage({ type: event, emit: message });
+       node.swim.emit(event,message);
+    };
 };
