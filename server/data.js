@@ -38,7 +38,7 @@ module.exports= function (app,node)
                  });
         };
 
-    app.put('/dull/data/:bucket/:key', mw.text, function (req,res)
+    app.put('/dull/bucket/:bucket/data/:key', mw.text, function (req,res)
     {
         var w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,node.cap.n),
@@ -77,7 +77,7 @@ module.exports= function (app,node)
         });
     });
 
-    app.get('/dull/data/:bucket/:key', function (req, res)
+    app.get('/dull/bucket/:bucket/data/:key', function (req, res)
     {
         var r= req.query.r || node.cap.r,
             nodes= node.ring.range(req.params.key,node.cap.n),
@@ -140,7 +140,7 @@ module.exports= function (app,node)
         });
     });
 
-    app.delete('/dull/data/:bucket/:key', function (req,res)
+    app.delete('/dull/bucket/:bucket/data/:key', function (req,res)
     {
         var w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,node.cap.n),
@@ -178,6 +178,29 @@ module.exports= function (app,node)
              console.log('del success'); 
         });
 
+    });
+
+    app.get('/dull/bucket/:bucket/approximateSize/:from..:to', function (req, res, next)
+    {
+        var size= 0;
+
+        async.forEach(node.ring.nodes(),
+        function (node,done)
+        {
+            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
+            .approximateSize(req.params.from,req.params.to,function (err,size)
+            {
+                if (!err) size+= size; 
+                done(err); 
+            });
+        },
+        function (err)
+        {
+           if (err)
+             next(err);
+           else
+             res.send(size);
+        });
     });
 
 };

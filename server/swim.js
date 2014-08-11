@@ -353,4 +353,6 @@ module.exports= function (app,node,opts)
        enqueueMessage({ type: event, emit: message });
        node.swim.emit(event,message);
     };
+
+    node.ring.nodes= _.bind(ring.nodes,ring);
 };
