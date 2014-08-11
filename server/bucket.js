@@ -88,8 +88,10 @@ module.exports= function (app,node)
         res.end();
     });
 
+/*
     process.on('exit', close);
     process.on('SIGINT', process.exit);
     process.on('SIGTERM', process.exit);
     process.on('SIGHUP', process.exit);
+*/
 };

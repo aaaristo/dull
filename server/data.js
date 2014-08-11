@@ -2,6 +2,11 @@ var mw= require('./middleware'),
     _= require('underscore'),
     async= require('async'),
     multilevel= require('multilevel-http'),
+    merge = require('mergesort-stream'),
+    JSONStream = require('JSONStream'),
+    map   =  require('map-stream'),
+    bytewise = require('bytewise/hex'),
+    encodeKey = bytewise.encode.bind(bytewise),
     crypto = require('crypto');
 
 module.exports= function (app,node)
@@ -36,6 +41,26 @@ module.exports= function (app,node)
                        return true; 
                      } 
                  });
+        },
+        compareKeys= function (value1, value2)
+        {
+              var key1 = encodeKey(value1),
+                  key2 = encodeKey(value2);
+              if (key1 > key2) return 1;
+              else if (key1 < key2) return -1;
+              return 0;
+        },
+        unique= function ()
+        {
+           var last;
+
+           return map(function (data, cb)
+           {
+                last!==data ? 
+                  cb(null, data) : 
+                  cb();
+                last= data;
+           });
         };
 
     app.put('/dull/bucket/:bucket/data/:key', mw.text, function (req,res)
@@ -203,4 +228,35 @@ module.exports= function (app,node)
         });
     });
 
+    app.get('/dull/bucket/:bucket/keys', function (req, res, next)
+    {
+        var streams= [];
+
+        async.forEach(node.ring.nodes(),
+        function (node,done)
+        {
+            streams.push(multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
+                                   .keyStream());
+            done();
+        },
+        function ()
+        {
+           var merged= merge(compareKeys,streams);
+
+           streams.forEach(function (stream)
+           {
+                stream.on('error', function (err)
+                {
+                    merged.emit('error', err);
+                });
+           });
+
+           res.type('json');
+
+           merged
+             .pipe(unique())
+             .pipe(JSONStream.stringify())
+             .pipe(res);
+        });
+    });
 };
