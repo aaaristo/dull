@@ -29,9 +29,9 @@ module.exports= function (app,node)
                      if (errs.length==max)
                      {
                        if (type=='notfound')
-                         res.send(404,put ? 'bucket not found' : 'key not found');
+                         res.status(404).send(put ? 'bucket not found' : 'key not found');
                        else
-                         res.send(500,errors);
+                         res.status(500).send(errors);
 
                        return true; 
                      } 
@@ -49,10 +49,10 @@ module.exports= function (app,node)
                      });
 
         if (node.cap.n < w)
-          res.send(500,'the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
+          res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
         else
         if (nodes.length < w)
-          res.send(500,'we have only '+nodes.length+' nodes active, and you specified w='+w);
+          res.status(500).send('we have only '+nodes.length+' nodes active, and you specified w='+w);
         else
         async.forEach(nodes,
         function (node,done)
@@ -70,7 +70,7 @@ module.exports= function (app,node)
         },
         function ()
         {
-           if (errors.length > (node.cap.n-w))
+           if (errors.length > (node.cap.n-w) || errors.length == nodes.length)
              resolveErrors(errors,res,w,true);
            else
              console.log('put success'); 
@@ -85,10 +85,10 @@ module.exports= function (app,node)
             values= [];
 
         if (node.cap.n < r)
-          res.send(500,'the cluster has n='+node.cap.n+' you cannot specify a greater r. ('+r+')');
+          res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater r. ('+r+')');
         else
         if (nodes.length < r)
-          res.send(500,'we have only '+nodes.length+' nodes active, and you specified r='+r);
+          res.status(500).send('we have only '+nodes.length+' nodes active, and you specified r='+r);
         else
         async.forEach(nodes,
         function (node,done)
@@ -106,7 +106,7 @@ module.exports= function (app,node)
         },
         function ()
         {
-           if (errors.length > (node.cap.n-r))
+           if (errors.length > (node.cap.n-r) || errors.length == nodes.length)
                resolveErrors(errors,res,r);
            else
            {
@@ -121,10 +121,10 @@ module.exports= function (app,node)
 
                
                if (max < r)
-                 res.send(500,'We have only '+max+' replicas that agree on a value for that key, you specified r='+r);
+                 res.status(500).send('We have only '+max+' replicas that agree on a value for that key, you specified r='+r);
                else
                if (cnt[max]>1)
-                 res.send(500,'Doh, we have diverging replicas for that key');
+                 res.status(500).send('Doh, we have diverging replicas for that key');
                else
                  _.keys(uval).some(function (hash)
                  {
@@ -151,10 +151,10 @@ module.exports= function (app,node)
                      });
 
         if (node.cap.n < w)
-          res.send(500,'the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
+          res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
         else
         if (nodes.length < w)
-          res.send(500,'we have only '+nodes.length+' nodes active, and you specified w='+w);
+          res.status(500).send('we have only '+nodes.length+' nodes active, and you specified w='+w);
         else
         async.forEach(nodes,
         function (node,done)
@@ -172,7 +172,7 @@ module.exports= function (app,node)
         },
         function ()
         {
-           if (errors.length > (node.cap.n-w))
+           if (errors.length > (node.cap.n-w) || errors.length == nodes.length)
              resolveErrors(errors,res,w);
            else
              console.log('del success'); 

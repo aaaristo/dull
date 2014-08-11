@@ -32,7 +32,7 @@ module.exports= function (app,node,opts)
     // todo:
     // adapt ping_timeout avg(response time)
 
-    node.ring= new HashRing();
+    node.ring= new HashRing([node.string]);
     node.swim= new EventEmitter();
 
     var periodSeq= 0,
@@ -121,7 +121,14 @@ module.exports= function (app,node,opts)
               console.log('swim','receive',message);
 
               if (message.emit!==undefined)
-                node.swim.emit(message.type,message.emit);
+                try
+                {
+                    node.swim.emit(message.type,message.emit);
+                }
+                catch (ex)
+                {
+                   console.log('swim','emit error',ex,ex.stack);
+                }
               else 
                 receive[message.type](message.subject,message.inc);
 

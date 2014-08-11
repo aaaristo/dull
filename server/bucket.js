@@ -10,6 +10,24 @@ module.exports= function (app,node)
         {
            return _.pluck(node.ring.continuum().servers,'string');
         },
+        filter= function (bucket)
+        {
+             return function (r)
+             {
+                return (''+r.regexp=='/^\\/mnt\\/'+bucket+'\\/?(?=\\/|$)/i');
+             }
+        },
+        mount= function (bucket)
+        {
+           var bucketApp= multilevel.server(node.path+'/'+bucket);
+           node.buckets.open[bucket]= bucketApp.db;
+           app.use('/mnt/'+bucket,bucketApp);
+        },
+        umount= function (bucket)
+        {
+           ut.rmf(app._router.stack,filter(bucket));
+           node.buckets.open[bucket].close(console.log); 
+        },
         init= function (db)
         {
            node.buckets= { db: db, open: {} };
@@ -17,14 +35,14 @@ module.exports= function (app,node)
            db.readStream().on('data',function (data)
            {
                var bucket= { name: data.key, opts: ut.json(data.value) };
-
-               node.buckets.open[bucket.name]= multilevel.server(node.path+'/'+bucket.name,{ base: '/mnt/'+bucket.name },app).db;
+               mount(bucket.name);
            });
         };
 
-    var s= multilevel.server(node.path+'/buckets',{ base: '/buckets' },app);
+    var bucketsApp= multilevel.server(node.path+'/buckets');
+    app.use('/buckets',bucketsApp);
 
-    init(s.db);
+    init(bucketsApp.db);
 
     node.swim.on('bucket_put',function (bucket)
     {
@@ -32,22 +50,18 @@ module.exports= function (app,node)
         {
              if (err) return console.log(err);
 
-             if (!_.filter(app._router.stack,
-                 function (r) { return r.route&&r.route.path=='/mnt/'+bucket.name+'/data'; })[0])
-               node.buckets.open[bucket.name]= multilevel
-                    .server(node.path+'/'+bucket.name,{ base: '/mnt/'+bucket.name },app).db;
+             if (!_.filter(app._router.stack,filter(bucket.name))[0])
+               mount(bucket.name);
         });
     });
 
     node.swim.on('bucket_delete',function (bucket)
     {
-        // node.buckets.db del
-        ut.rmf(app._router.stack,function (r)
+        node.buckets.db.del(bucket, function (err)
         {
-             return (r.route&&r.route.path.indexOf('/mnt/'+bucket+'/')==0);
+            if (err) return console.log(err);
+            umount(bucket);    
         });
-
-        node.buckets.open[bucket].close(console.log); 
     });
 
     app.put('/dull/bucket/:bucket', mw.json, function (req,res)
