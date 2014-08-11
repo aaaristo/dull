@@ -37,6 +37,18 @@ module.exports= function (app,node)
                var bucket= { name: data.key, opts: ut.json(data.value) };
                mount(bucket.name);
            });
+        },
+        close= function ()
+        {
+           console.log('closing bucket(s) leveldb...');
+
+           _.values(node.buckets.open).forEach(function (db)
+           {
+              db.close(console.log);
+           });
+
+           bucketsApp.db.close(console.log);
+           process.exit(1);
         };
 
     var bucketsApp= multilevel.server(node.path+'/buckets');
@@ -76,4 +88,8 @@ module.exports= function (app,node)
         res.end();
     });
 
+    process.on('exit', close);
+    process.on('SIGINT', process.exit);
+    process.on('SIGTERM', process.exit);
+    process.on('SIGHUP', process.exit);
 };
