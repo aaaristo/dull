@@ -371,6 +371,10 @@ module.exports= function (app,node)
            res.type('json');
 
            merged
+             .on('error',function (err)
+             {
+                next(err);
+             })
              .pipe(unique())
              .pipe(JSONStream.stringify())
              .pipe(res);
