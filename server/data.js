@@ -5,44 +5,14 @@ var mw= require('./middleware'),
     multilevel= require('multilevel-http'),
     merge = require('mergesort-stream'),
     JSONStream = require('JSONStream'),
-    map   =  require('map-stream');
+    map   =  require('map-stream'),
+    vectorclock   = require('vectorclock');
 
 const KS= '::';
 
 module.exports= function (app,node)
 {
-    var resolveErrors= function (errors, res, wr, put)
-        {
-              var uerr= _.groupBy(errors,function (err)
-                        {
-                            if (err.statusCode == 404 || err.err.indexOf('NotFoundError') > -1)
-                              return 'notfound';
-                            else
-                              return 'error';
-                        }),
-                  len= _.pluck(_.values(uerr),'length'),
-                  max= _.max(len),
-                  cnt= _.countBy(len,_.identity);
-
-               if (max < wr || cnt[max]>1)
-                 res.send(500,errors);
-               else
-                 _.keys(uerr).some(function (type)
-                 {
-                     var errs= uerr[type];
-
-                     if (errs.length==max)
-                     {
-                       if (type=='notfound')
-                         res.status(404).send(put ? 'bucket not found' : 'key not found');
-                       else
-                         res.status(500).send(errors);
-
-                       return true; 
-                     } 
-                 });
-        },
-        compareKeys= function (key1, key2)
+    var compareKeys= function (key1, key2)
         {
               if (key1 > key2) return 1;
               else if (key1 < key2) return -1;
@@ -54,11 +24,45 @@ module.exports= function (app,node)
 
            return map(function (data, cb)
            {
-                last!==data ? 
-                  cb(null, data) : 
-                  cb();
+                last!==data ? cb(null, data) : cb();
                 last= data;
            });
+        },
+        readRepair= function (bucket,key,res,nodes)
+        {
+            async.forEach(nodes,
+            function (node,done)
+            {
+                multilevel.client('http://'+node.string+'/mnt/'+bucket+'/')
+                .batch([{ // key
+                              key: ['K',key,'_'].join(KS),
+                            value: key,
+                             type: 'put'
+                        },
+                        { // value meta 
+                              key: ['V',key,'M'].join(KS),
+                            value: JSON.stringify(_.extend(res.meta,{ vclock: vectorclock.merge(node.vclock,res.meta.vclock) })),
+                             type: 'put'
+                        },
+                        { // value content
+                              key: ['V',key,'C'].join(KS),
+                            value: res.content,
+                             type: 'put'
+                        }],
+                function (err,res)
+                {
+                   if (err)
+                     console.log('read repair','cannot repair',node.string,bucket,key,err);
+                   else
+                     console.log('read repair','repaired',node.string,bucket,key);
+
+                   done();
+                });
+            },
+            function ()
+            {
+               console.log('read repair','end'); 
+            });
         };
 
     app.put('/dull/bucket/:bucket/data/:key', mw.binary, function (req,res)
@@ -66,10 +70,11 @@ module.exports= function (app,node)
         var w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,node.cap.n),
             errors= [],
-            success= _.after(w,function ()
+            currentNode= node.string,
+            success= _.after(w,_.once(function ()
                      {
                          res.end();
-                     });
+                     }));
 
         if (node.cap.n < w)
           res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
@@ -90,6 +95,7 @@ module.exports= function (app,node)
                           key: ['V',req.params.key,'M'].join(KS),
                         value: JSON.stringify
                                ({ 
+                                 vclock: vectorclock.increment(req.headers['x-dull-vclock'] ? JSON.parse(req.headers['x-dull-vclock']) : {},currentNode),
                                    hash: ut.hash(req.binary),
                                 headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
                                          { 
@@ -117,7 +123,7 @@ module.exports= function (app,node)
         function ()
         {
            if (errors.length > (node.cap.n-w) || errors.length == nodes.length)
-             resolveErrors(errors,res,w,true);
+             res.send(500,errors);
            else
              console.log('put success'); 
         });
@@ -128,7 +134,61 @@ module.exports= function (app,node)
         var r= req.query.r || node.cap.r,
             nodes= node.ring.range(req.params.key,node.cap.n),
             errors= [],
-            values= [];
+            responses= [],
+            success= _.after(r,_.once(function () // after r replicas respond, return to the client
+                     {
+                           var found= _.filter(responses,function (r) { return !r.notfound; });
+                           found.sort(vectorclock.descSort); 
+
+                           var first= found.shift(), repaired = first ? [first] : [];
+
+                           found.forEach(function (response, index)
+                           {
+                              // if they are concurrent with that item, then there is a conflict
+                              // that we cannot resolve, so we need to return the item.
+                              if (vectorclock.isConcurrent(first, response)
+                                  && !vectorclock.isIdentical(response, first))
+                                repaired.push(response);
+                           });
+
+                           
+                           if (repaired.length==0)
+                             res.status(404).send('Key not found');
+                           else
+                           if (repaired.length==1)
+                           {
+                               _.keys(first.meta.headers).forEach(function (name)
+                               {
+                                   res.setHeader(name,first.meta.headers[name]);
+                               });
+
+                               res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
+
+                               if (first.meta.headers['content-type']=='application/json')
+                                 res.end(first.content);
+                               else
+                                 res.end(new Buffer(first.content,'base64'));
+                           }
+                           else
+                           { 
+                               var parts= [];
+
+                               repaired.forEach(function (response)
+                               {
+                                  parts.push
+                                  ({
+                                      headers: _.extend(response.meta.headers,
+                                                        { 'x-dull-vclock': JSON.stringify(response.meta.vclock) },
+                                                        response.meta.headers['content-type']!='application/json' ? 
+                                                        { 'Content-Transfer-Encoding': 'base64' } : undefined),
+                                      body: response.content
+                                  });
+                               });
+
+                               res.status(300);
+                               ut.multipart(res,parts);
+                           }
+                     }));
 
         if (node.cap.n < r)
           res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater r. ('+r+')');
@@ -146,7 +206,7 @@ module.exports= function (app,node)
                              end: ['V',req.params.key,'M'].join(KS) })
             .on('error', function (err)
             {
-                 errors.push({ node: node, err: err });
+               errors.push({ node: node, err: err });
             })
             .on('data', function (data)
             {
@@ -154,53 +214,58 @@ module.exports= function (app,node)
             })
             .on('end', function ()
             {
-                values.push({ meta: JSON.parse(parts[1]), content: parts[0] });
+                if (parts.length!=2)
+                    responses.push({ node: node, notfound: true });
+                else
+                {
+                    var meta= JSON.parse(parts[1]);
+                    responses.push({ node: node, clock: meta.vclock, meta: meta, content: parts[0] });
+                }
+
+                success();
                 done();
             });
         },
         function ()
         {
            if (errors.length > (node.cap.n-r) || errors.length == nodes.length)
-               resolveErrors(errors,res,r);
+             res.send(500,errors);
+           else
+           if (responses.length<r)
+             res.status(206).send('Only '+responses.length+' replicas responded with a value, you specified r='+r);
            else
            {
-               var uval= _.groupBy(values,function (val)
-                         {
-                            return val.meta.hash;
-                         }),
-                   len= _.pluck(_.values(uval),'length'),
-                   max= _.max(len),
-                   cnt= _.countBy(len,_.identity);
+               // we might have more responses so lets re-resolve vclocks
+               var found= _.filter(responses,function (r) { return !r.notfound; });
+               found.sort(vectorclock.descSort); 
 
+               var first= found.shift(), repaired = first ? [first] : [], needRepair= [];
 
-               
-               if (max < r)
-                 res.status(500).send('We have only '+max+' replicas that agree on a value for that key, you specified r='+r);
-               else
-               if (cnt[max]>1)
-                 res.status(500).send('Doh, we have diverging replicas for that key');
-               else
-                 _.keys(uval).some(function (hash)
-                 {
-                     var vals= uval[hash];
+               found.forEach(function (response, index)
+               {
+                  var cmp= vectorclock.compare(first, response); 
 
-                     if (vals.length==max)
-                     {
-                       var val= vals[0];
+                  // if they are concurrent with that item, then there is a conflict
+                  // that we cannot resolve, so we need to return the item.
+                  if (cmp==0 && !vectorclock.isIdentical(response, first))
+                    repaired.push(response);
+                  else                  
+                  if (cmp==1)
+                    needRepair.push({ string: response.node, vclock: response.meta.vclock });
+               });
 
-                       _.keys(val.meta.headers).forEach(function (name)
-                       {
-                           res.setHeader(name,val.meta.headers[name]);
-                       });
+               if (repaired.length==1) // we have a value
+               {
+                 var notfound= _.filter(responses,function (r) { return !!r.notfound; });
 
-                       if (val.meta.headers['content-type']=='application/json')
-                         res.end(val.content);
-                       else
-                         res.end(new Buffer(val.content,'base64'));
-
-                       return true; 
-                     } 
+                 notfound.forEach(function (res)
+                 { 
+                    needRepair.push({ string: res.node, vclock: {} });
                  });
+
+                 if (needRepair.length>0)
+                   readRepair(req.params.bucket,req.params.key,first,needRepair);
+               }
            }
         });
     });
@@ -210,10 +275,10 @@ module.exports= function (app,node)
         var w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,node.cap.n),
             errors= [],
-            success= _.after(w,function ()
+            success= _.after(w,_.once(function ()
                      {
                          res.end();
-                     });
+                     }));
 
         if (node.cap.n < w)
           res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
@@ -250,7 +315,7 @@ module.exports= function (app,node)
         function ()
         {
            if (errors.length > (node.cap.n-w) || errors.length == nodes.length)
-             resolveErrors(errors,res,w);
+             res.send(500,errors);
            else
              console.log('del success'); 
         });

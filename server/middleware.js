@@ -45,6 +45,8 @@ exports.binary= function (req,res,next)
 
 exports.log= function (req, res, next)
 {
-   console.log(req.method,req.protocol + '://' + req.get('host') + req.originalUrl);
+   if (req.originalUrl.indexOf('/gossip')!=0)
+     console.log(req.method,req.protocol + '://' + req.get('host') + req.originalUrl);
+
    next();
 };

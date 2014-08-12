@@ -25,6 +25,7 @@
     "multilevel-http": "0.0.2",
     "optimist": "^0.6.1",
     "request": "^2.39.0",
-    "underscore": "^1.6.0"
+    "underscore": "^1.6.0",
+    "vectorclock": "0.0.0"
   }
 }
