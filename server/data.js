@@ -219,10 +219,22 @@ module.exports= function (app,node)
         function (node,done)
         {
             multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-            .del(req.params.key,function (err,value,resp)
+            .batch([{ // key
+                          key: ['K',req.params.key,'_'].join(KS),
+                         type: 'del'
+                    },
+                    { // value meta 
+                          key: ['V',req.params.key,'M'].join(KS),
+                         type: 'del'
+                    },
+                    { // value content
+                          key: ['V',req.params.key,'C'].join(KS),
+                         type: 'del' 
+                    }],
+            function (err,res)
             {
                if (err)
-                 errors.push({ node: node, err: err, statusCode: resp.statusCode });
+                 errors.push({ node: node, err: err, statusCode: res.statusCode });
                else
                  success();
 
