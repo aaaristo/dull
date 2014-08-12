@@ -88,18 +88,20 @@ module.exports= function (app,node)
                     },
                     { // value meta 
                           key: ['V',req.params.key,'M'].join(KS),
-                        value: { 
+                        value: JSON.stringify
+                               ({ 
                                    hash: ut.hash(req.binary),
-                                headers: { 
-                                            'Content-Type': req.headers['content-type'] || 'application/octet-stream',
-                                            'Content-Length': req.headers['content-length'] || req.binary.length
-                                         } 
-                               },
+                                headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
+                                         { 
+                                            'content-type': 'application/json',
+                                            'content-length': req.binary.length
+                                         })
+                               }),
                          type: 'put'
                     },
                     { // value content
                           key: ['V',req.params.key,'C'].join(KS),
-                        value: req.binary,
+                        value: req.headers['content-type']!='application/json' ? req.binary.toString('base64') : req.binary.toString('utf8'),
                          type: 'put' 
                     }],
             function (err,res)
@@ -191,7 +193,11 @@ module.exports= function (app,node)
                            res.setHeader(name,val.meta.headers[name]);
                        });
 
-                       res.end(val.content);
+                       if (val.meta.headers['content-type']=='application/json')
+                         res.end(val.content);
+                       else
+                         res.end(new Buffer(val.content,'base64'));
+
                        return true; 
                      } 
                  });
