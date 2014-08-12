@@ -22,4 +22,5 @@ $ nodemon index --port 3004 --path ./data/node4
 $ curl -X POST -d '127.0.0.1:3001' http://localhost:3004/swim/join
 $ curl -X DELETE http://localhost:3004/swim/leave
 $ curl http://localhost:3002/dull/bucket/people/keys
+$ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http://127.0.0.1:3001/dull/bucket/people/data/v8.png
 ```
