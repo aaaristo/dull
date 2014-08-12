@@ -25,6 +25,24 @@ exports.json= function (req,res,next)
     });
 };
 
+exports.binary= function (req,res,next)
+{
+    var chunks= [];
+    req.on('data', function(chunk){ chunks.push(chunk); });
+    req.on('end', function ()
+    { 
+       try
+       {
+          req.binary= Buffer.concat(chunks);
+          next(); 
+       }
+       catch (ex)
+       {
+          next(ex);
+       }
+    });
+};
+
 exports.log= function (req, res, next)
 {
    console.log(req.method,req.protocol + '://' + req.get('host') + req.originalUrl);

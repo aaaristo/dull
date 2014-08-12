@@ -56,7 +56,7 @@ module.exports= function (app,node)
 
     init(bucketsApp.db);
 
-    node.swim.on('bucket_put',function (bucket)
+    node.gossip.on('bucket_put',function (bucket)
     {
         node.buckets.db.put(bucket.name, JSON.stringify(bucket.opts), function (err)
         {
@@ -67,7 +67,7 @@ module.exports= function (app,node)
         });
     });
 
-    node.swim.on('bucket_delete',function (bucket)
+    node.gossip.on('bucket_delete',function (bucket)
     {
         node.buckets.db.del(bucket, function (err)
         {
@@ -78,13 +78,13 @@ module.exports= function (app,node)
 
     app.put('/dull/bucket/:bucket', mw.json, function (req,res)
     {
-        node.swim.send('bucket_put',{ name: req.params.bucket, opts: req.json });
+        node.gossip.send('bucket_put',{ name: req.params.bucket, opts: req.json });
         res.end();
     });
 
     app.delete('/dull/bucket/:bucket', function (req,res)
     {
-        node.swim.send('bucket_delete',req.params.bucket);
+        node.gossip.send('bucket_delete',req.params.bucket);
         res.end();
     });
 

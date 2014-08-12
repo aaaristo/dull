@@ -1,13 +1,13 @@
 var mw= require('./middleware'),
+    ut= require('./util'),
     _= require('underscore'),
     async= require('async'),
     multilevel= require('multilevel-http'),
     merge = require('mergesort-stream'),
     JSONStream = require('JSONStream'),
-    map   =  require('map-stream'),
-    bytewise = require('bytewise/hex'),
-    encodeKey = bytewise.encode.bind(bytewise),
-    crypto = require('crypto');
+    map   =  require('map-stream');
+
+const KS= '::';
 
 module.exports= function (app,node)
 {
@@ -42,10 +42,8 @@ module.exports= function (app,node)
                      } 
                  });
         },
-        compareKeys= function (value1, value2)
+        compareKeys= function (key1, key2)
         {
-              var key1 = encodeKey(value1),
-                  key2 = encodeKey(value2);
               if (key1 > key2) return 1;
               else if (key1 < key2) return -1;
               return 0;
@@ -63,7 +61,7 @@ module.exports= function (app,node)
            });
         };
 
-    app.put('/dull/bucket/:bucket/data/:key', mw.text, function (req,res)
+    app.put('/dull/bucket/:bucket/data/:key', mw.binary, function (req,res)
     {
         var w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,node.cap.n),
@@ -83,7 +81,28 @@ module.exports= function (app,node)
         function (node,done)
         {
             multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-            .put(req.params.key,req.text,function (err,res)
+            .batch([{ // key
+                          key: ['K',req.params.key,'_'].join(KS),
+                        value: req.params.key,
+                         type: 'put'
+                    },
+                    { // value meta 
+                          key: ['V',req.params.key,'M'].join(KS),
+                        value: { 
+                                   hash: ut.hash(req.binary),
+                                headers: { 
+                                            'Content-Type': req.headers['content-type'] || 'application/octet-stream',
+                                            'Content-Length': req.headers['content-length'] || req.binary.length
+                                         } 
+                               },
+                         type: 'put'
+                    },
+                    { // value content
+                          key: ['V',req.params.key,'C'].join(KS),
+                        value: req.binary,
+                         type: 'put' 
+                    }],
+            function (err,res)
             {
                if (err)
                  errors.push({ node: node, err: err, statusCode: res.statusCode });
@@ -118,15 +137,23 @@ module.exports= function (app,node)
         async.forEach(nodes,
         function (node,done)
         {
-            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-            .get(req.params.key,function (err,value,resp)
-            {
-               if (err)
-                 errors.push({ node: node, err: err, statusCode: resp.statusCode });
-               else
-                 values.push(value);
+            var parts= [];
 
-               done();
+            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
+            .valueStream({ start: ['V',req.params.key,'C'].join(KS),
+                             end: ['V',req.params.key,'M'].join(KS) })
+            .on('error', function (err)
+            {
+                 errors.push({ node: node, err: err });
+            })
+            .on('data', function (data)
+            {
+               parts.push(data); 
+            })
+            .on('end', function ()
+            {
+                values.push({ meta: JSON.parse(parts[1]), content: parts[0] });
+                done();
             });
         },
         function ()
@@ -137,7 +164,7 @@ module.exports= function (app,node)
            {
                var uval= _.groupBy(values,function (val)
                          {
-                            return crypto.createHash('md5').update(val).digest('hex');
+                            return val.meta.hash;
                          }),
                    len= _.pluck(_.values(uval),'length'),
                    max= _.max(len),
@@ -157,7 +184,14 @@ module.exports= function (app,node)
 
                      if (vals.length==max)
                      {
-                       res.send(vals[0]);
+                       var val= vals[0];
+
+                       _.keys(val.meta.headers).forEach(function (name)
+                       {
+                           res.setHeader(name,val.meta.headers[name]);
+                       });
+
+                       res.end(val.content);
                        return true; 
                      } 
                  });
@@ -236,7 +270,7 @@ module.exports= function (app,node)
         function (node,done)
         {
             streams.push(multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-                                   .keyStream());
+                                   .valueStream({ start: 'K'+KS, end: ['K','\xff'].join(KS) }));
             done();
         },
         function ()

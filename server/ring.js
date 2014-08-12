@@ -1,21 +1,22 @@
-var HashRing= require('hashring');
+var HashRing= require('hashring'),
+    _= require('underscore');
 
 module.exports= function (app,node)
 {
     node.ring= new HashRing([node.string]);
 
-    node.swim.on('join',function (server)
+    node.gossip.on('join',function (server)
     {
         node.ring.add(server.string);
     }); 
 
-    node.swim.on('leave',function (server)
+    node.gossip.on('leave',function (server)
     {
         node.ring.remove(server.string);
     }); 
 
     node.ring.nodes= function ()
     {
-        return _.pluck(node.continuum().servers,'string');
+        return _.pluck(node.ring.continuum().servers,'string');
     };
 };

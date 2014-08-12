@@ -1,4 +1,5 @@
-var _= require('underscore');
+var _= require('underscore'),
+    crypto = require('crypto');
 
 exports.rmf= function (arr,fn)
 {
@@ -26,4 +27,9 @@ exports.json= function (x)
     {
        return {};
     }
+};
+
+exports.hash= function (value)
+{
+   return crypto.createHash('sha1').update(value).digest('hex');
 };

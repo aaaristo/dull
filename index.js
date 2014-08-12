@@ -14,12 +14,12 @@ var node= _.defaults(argv,{ host: '127.0.0.1',
 
 node.string= [node.host,node.port].join(':');
 
-var swimApp= swim(node.string,argv.swim);
+var swimApp= swim(node.string,_.extend(argv.swim || {},{ base: '/gossip' }));
 
 app.use(mw.log);
-app.use('/swim',swimApp);
+app.use('/gossip',swimApp);
 
-node.swim= swimApp.swim;
+node.gossip= swimApp.swim;
 
 require('./server/ring')(app,node);
 require('./server/buckets')(app,node);
