@@ -56,6 +56,16 @@ module.exports= function (app,node)
 
     init(bucketsApp.db);
 
+    // when a node joins start gossiping about buckets
+    node.gossip.on('join',function (server)
+    {
+         bucketsApp.db.readStream().on('data',function (data)
+         {
+              var bucket= { name: data.key, opts: ut.json(data.value) };
+              node.gossip.send('bucket_put',bucket);
+         });
+    });
+
     node.gossip.on('bucket_put',function (bucket)
     {
         node.buckets.db.put(bucket.name, JSON.stringify(bucket.opts), function (err)
