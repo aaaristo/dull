@@ -25,6 +25,32 @@ $ curl http://localhost:3002/dull/bucket/people/keys
 $ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http://127.0.0.1:3001/dull/bucket/people/data/v8.png
 ```
 
+## CLI arguments
+
+### node options
+* `--host <ip address>` (default: `127.0.0.1`): listen address.
+* `--port <port>` (default: `3000`): listen port.
+* `--path <dir>` (default: `./data`): directory to store data files.
+
+### cap controls
+* `--cap.n <n>` (default: `3`): number of replicas for a given key.
+* `--cap.r <r>` (default: `2`): number of replicas that should respond to a read request, for it to be considered successful.
+* `--cap.w <w>` (default: `2`): number of replicas that should respond to a write request, for it to be considered successful.
+
+### ring options (hashring)
+* `--ring.vnode_count <n>` (default: `40`): The amount of virtual nodes per server.
+* `--ring.max_cache_size <n>` (default: `5000`): We use a simple LRU cache inside the module to speed up frequent key lookups, you can customize the amount of keys that need to be cached.
+
+### gossip options (express-swim)
+* `--swim.verbose` (default: `false`): make the gossip protocol very verbose.
+* `--swim.period_length` (default: `3000`): period length in milliseconds.
+* `--swim.ping_timeout` (default: `1000`): timeout of a ping request. 
+* `--swim.failing_timeout` (default: `9000`): timeout of a suspected state before failing a node.
+* `--swim.message_ttl` (default: `10000`): the time a message should be kept in the message queue.
+* `--swim.pingreq_nodes` (default: `2`): number of random nodes to select for a ping-req.
+* `--swim.tune_gossip` (default: `2`): tune maximum message retransmission (keep it "small").
+* `--swim.gossip_messages` (default: `10`): max piggybacked messages per request.
+
 ## HTTP API
 
 A node in dull is the string host:port.

@@ -1,9 +1,17 @@
 var HashRing= require('hashring'),
     _= require('underscore');
 
-module.exports= function (app,node)
+module.exports= function (app,node,opts)
 {
-    node.ring= new HashRing([node.string]);
+    opts= _.defaults(opts,{ vnode_count: 40, max_cache_size: 5000 });
+
+    node.ring= new HashRing([node.string],'sha1',
+                            {
+                                'vnode count': opts.vnode_count,
+                                'compatibility': 'hash_ring',
+                                'replicas': opts.replicas,
+                                'max cache size': opts.max_cache_size
+                            });
 
     node.gossip.on('join',function (server)
     {
