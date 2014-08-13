@@ -120,12 +120,12 @@ You can check [multilevel-http](https://github.com/juliangruber/multilevel-http#
 
 #### Buckets
 ```
-curl http://<active node>/buckets/<multilevel-http url>
+curl http://<active node>/buckets/<multilevel-http path>
 ```
 
 #### Data
 ```
-curl http://<active node>/mnt/<bucket name>/<multilevel-http url>
+curl http://<active node>/mnt/<bucket name>/<multilevel-http path>
 ```
 
 ## Things to implement
