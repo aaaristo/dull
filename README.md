@@ -43,10 +43,10 @@ $ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http:/
 
 ### gossip options (express-swim)
 * `--swim.verbose` (default: `false`): make the gossip protocol very verbose.
-* `--swim.period_length` (default: `3000`): period length in milliseconds.
-* `--swim.ping_timeout` (default: `1000`): timeout of a ping request. 
-* `--swim.failing_timeout` (default: `9000`): timeout of a suspected state before failing a node.
-* `--swim.message_ttl` (default: `10000`): the time a message should be kept in the message queue.
+* `--swim.period_length` (default: `3000`): period length (in milliseconds).
+* `--swim.ping_timeout` (default: `1000`): timeout of a ping request (in milliseconds).
+* `--swim.failing_timeout` (default: `9000`): timeout of a suspected state before failing a node (in milliseconds).
+* `--swim.message_ttl` (default: `10000`): the time a message should be kept in the message queue (in milliseconds).
 * `--swim.pingreq_nodes` (default: `2`): number of random nodes to select for a ping-req.
 * `--swim.tune_gossip` (default: `2`): tune maximum message retransmission (keep it "small").
 * `--swim.gossip_messages` (default: `10`): max piggybacked messages per request.
