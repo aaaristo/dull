@@ -273,7 +273,7 @@ module.exports= function (app,node)
     app.delete('/dull/bucket/:bucket/data/:key', function (req,res)
     {
         var w= req.query.w || node.cap.w,
-            nodes= node.ring.range(req.params.key,node.cap.n),
+            nodes= node.ring.nodes(), // we may have keys on any server if the hashring changed
             errors= [],
             success= _.after(w,_.once(function ()
                      {
