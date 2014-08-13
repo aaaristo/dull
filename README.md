@@ -24,3 +24,117 @@ $ curl -X DELETE http://localhost:3004/gossip/leave
 $ curl http://localhost:3002/dull/bucket/people/keys
 $ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http://127.0.0.1:3001/dull/bucket/people/data/v8.png
 ```
+
+## HTTP API
+
+A node in dull is the string host:port.
+
+### Cluster (express-swim)
+
+#### join a node to a cluster
+```
+curl -X POST -d <active node> http://<joining node>/gossip/join
+```
+
+#### make a node leave the cluster
+```
+curl -X DELETE http://<leaving node>/gossip/leave
+```
+
+#### list active nodes in the cluster
+```
+curl http://<active node>/gossip/nodes
+```
+
+### Buckets (server/buckets.js)
+
+#### create or update bucket and options
+```
+curl -X PUT -d <bucket options> http://<active node>/dull/bucket/<bucket name>
+```
+
+#### delete a bucket
+```
+curl -X DELETE http://<active node>/dull/bucket/<bucket name>
+```
+
+#### list buckets
+```
+curl http://<active node>/buckets/keys
+curl http://<active node>/buckets/data
+curl http://<active node>/buckets/values
+```
+
+### Data (server/data.js)
+
+#### put a KV
+```
+curl -X PUT -d <value> http://<active node>/dull/bucket/<bucket name>/data/<key>
+```
+
+this defaults to Content-Type: application/json. You can put any other value type
+like this:
+
+```
+curl -X PUT -d <value> -H 'Content-Type: <value type>' http://<active node>/dull/bucket/<bucket name>/data/<key>
+```
+
+or
+
+```
+curl -X PUT --data-binary @<file name> -H 'Content-Type: <value type>' http://127.0.0.1:3001/dull/bucket/<bucket name>/data/<key>
+```
+
+#### get a value
+```
+curl -v http://<active node>/dull/bucket/<bucket name>/data/<key>
+```
+
+you will get an header x-dull-vclock like this:
+
+```
+x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}
+```
+
+that you should pass back updating a value like this:
+
+```
+curl -X PUT -d <value> -H 'Content-Type: <value type>' -H 'x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}' http://<active node>/dull/bucket/<bucket name>/data/<key>
+```
+
+those are used in read-repair.
+
+#### delete a KV
+```
+curl -X DELETE http://<active node>/dull/bucket/<bucket name>/data/<key>
+```
+
+#### list all keys known to dull
+```
+curl http://<active node>/dull/bucket/<bucket name>/keys
+```
+
+### Access to any node leveldb
+
+You can check [multilevel-http](https://github.com/juliangruber/multilevel-http)
+
+#### Buckets (http://<active node>/buckets/<multilevel-http url>)
+
+#### Data (http://<active node>/mnt/<bucket name>/<multilevel-http url>)
+
+
+## Things to implement
+
+### CRDTs
+http://vimeo.com/43903960
+https://github.com/aphyr/meangirls
+
+### Tests
+https://github.com/aphyr/jepsen
+
+### Active anti-entropy
+http://en.wikipedia.org/wiki/Merkle_tree
+https://github.com/c-geek/merkle
+
+### Hinted hand-off
+leveldb range of keys to push to a node when it comes back
