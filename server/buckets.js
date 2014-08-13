@@ -32,6 +32,31 @@ module.exports= function (app,node)
         {
            node.buckets= { db: db, open: {} };
 
+           node.buckets.get= function (req, res, next)
+           {
+              var bucket= { name: req.params.bucket, opts: { cap: {} } };
+
+              db.get(bucket.name,function (err,data)
+              {
+                 if (err)
+                   next(err); 
+                 else
+                 {
+                   try
+                   {
+                      _.extend(bucket.opts,JSON.parse(data));
+                   }
+                   catch (ex)
+                   {
+                      console.log(ex);
+                   }
+                     
+                   req.bucket= bucket;
+                   next();
+                 }
+              });
+           };
+
            db.readStream().on('data',function (data)
            {
                var bucket= { name: data.key, opts: ut.json(data.value) };

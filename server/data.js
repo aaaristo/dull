@@ -65,10 +65,11 @@ module.exports= function (app,node)
             });
         };
 
-    app.put('/dull/bucket/:bucket/data/:key', mw.binary, function (req,res)
+    app.put('/dull/bucket/:bucket/data/:key', node.buckets.get, mw.binary, function (req,res)
     {
-        var w= req.query.w || node.cap.w,
-            nodes= node.ring.range(req.params.key,node.cap.n),
+        var n= req.bucket.opts.cap.n || node.cap.n,
+            w= req.query.w || node.cap.w,
+            nodes= node.ring.range(req.params.key,n),
             errors= [],
             currentNode= node.string,
             success= _.after(w,_.once(function ()
@@ -76,8 +77,8 @@ module.exports= function (app,node)
                          res.end();
                      }));
 
-        if (node.cap.n < w)
-          res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
+        if (n < w)
+          res.status(500).send('the cluster has n='+n+' you cannot specify a greater w. ('+w+')');
         else
         if (nodes.length < w)
           res.status(500).send('we have only '+nodes.length+' nodes active, and you specified w='+w);
@@ -122,17 +123,18 @@ module.exports= function (app,node)
         },
         function ()
         {
-           if (errors.length > (node.cap.n-w) || errors.length == nodes.length)
+           if (errors.length > (n-w) || errors.length == nodes.length)
              res.send(500,errors);
            else
              console.log('put success'); 
         });
     });
 
-    app.get('/dull/bucket/:bucket/data/:key', function (req, res)
+    app.get('/dull/bucket/:bucket/data/:key', node.buckets.get, function (req, res)
     {
-        var r= req.query.r || node.cap.r,
-            nodes= node.ring.range(req.params.key,node.cap.n),
+        var n= req.bucket.opts.cap.n || node.cap.n,
+            r= req.query.r || node.cap.r,
+            nodes= node.ring.range(req.params.key,n),
             errors= [],
             responses= [],
             success= _.after(r,_.once(function () // after r replicas respond, return to the client
@@ -190,8 +192,8 @@ module.exports= function (app,node)
                            }
                      }));
 
-        if (node.cap.n < r)
-          res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater r. ('+r+')');
+        if (n < r)
+          res.status(500).send('the cluster has n='+n+' you cannot specify a greater r. ('+r+')');
         else
         if (nodes.length < r)
           res.status(500).send('we have only '+nodes.length+' nodes active, and you specified r='+r);
@@ -228,7 +230,7 @@ module.exports= function (app,node)
         },
         function ()
         {
-           if (errors.length > (node.cap.n-r) || errors.length == nodes.length)
+           if (errors.length > (n-r) || errors.length == nodes.length)
              res.send(500,errors);
            else
            if (responses.length<r)
@@ -270,9 +272,10 @@ module.exports= function (app,node)
         });
     });
 
-    app.delete('/dull/bucket/:bucket/data/:key', function (req,res)
+    app.delete('/dull/bucket/:bucket/data/:key', node.buckets.get, function (req,res)
     {
-        var w= req.query.w || node.cap.w,
+        var n= req.bucket.opts.cap.n || node.cap.n,
+            w= req.query.w || node.cap.w,
             nodes= node.ring.nodes(), // we may have keys on any server if the hashring changed
             errors= [],
             success= _.after(w,_.once(function ()
@@ -280,8 +283,8 @@ module.exports= function (app,node)
                          res.end();
                      }));
 
-        if (node.cap.n < w)
-          res.status(500).send('the cluster has n='+node.cap.n+' you cannot specify a greater w. ('+w+')');
+        if (n < w)
+          res.status(500).send('the cluster has n='+n+' you cannot specify a greater w. ('+w+')');
         else
         if (nodes.length < w)
           res.status(500).send('we have only '+nodes.length+' nodes active, and you specified w='+w);
@@ -314,7 +317,7 @@ module.exports= function (app,node)
         },
         function ()
         {
-           if (errors.length > (node.cap.n-w) || errors.length == nodes.length)
+           if (errors.length > (n-w) || errors.length == nodes.length)
              res.send(500,errors);
            else
              console.log('del success'); 
