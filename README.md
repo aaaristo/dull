@@ -2,7 +2,8 @@ dull
 ====
 
 Playing around with multilevel-http, node-hashring and express-swim
-to build a riak-like distributed leveldb
+to build a riak-like distributed leveldb, any message passing between
+cluster nodes is http-based.
 
 
 ```sh
