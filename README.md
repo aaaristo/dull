@@ -116,12 +116,17 @@ curl http://<active node>/dull/bucket/<bucket name>/keys
 
 ### Access to any node leveldb
 
-You can check [multilevel-http](https://github.com/juliangruber/multilevel-http)
+You can check [multilevel-http](https://github.com/juliangruber/multilevel-http#http-api)
 
-#### Buckets (http://<active node>/buckets/<multilevel-http url>)
+#### Buckets
+```
+curl http://<active node>/buckets/<multilevel-http url>
+```
 
-#### Data (http://<active node>/mnt/<bucket name>/<multilevel-http url>)
-
+#### Data
+```
+curl http://<active node>/mnt/<bucket name>/<multilevel-http url>
+```
 
 ## Things to implement
 
