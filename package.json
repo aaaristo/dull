@@ -1,6 +1,6 @@
 {
   "name": "dull",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Playing around to build a riak-like distributed leveldb",
   "main": "index.js",
   "bin": {

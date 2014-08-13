@@ -6,6 +6,7 @@ to build a riak-like distributed leveldb
 
 
 ```sh
+$ npm install -g dull
 $ mkdir -p data/node1 data/node2 data/node3
 $ dull --port 3001 --path ./data/node1
 $ dull --port 3002 --path ./data/node2 --join 127.0.0.1:3001
