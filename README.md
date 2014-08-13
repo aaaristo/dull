@@ -16,7 +16,8 @@ $ curl http://localhost:3001/buckets/data
 $ curl -X PUT -d '{ "name": "Andrea", "lastname": "Gariboldi", age: 33 }' -H 'Content-Type: application/json' http://localhost:3002/dull/bucket/people/data/andrea
 $ curl http://localhost:3002/dull/bucket/people/data/andrea
 $ curl -X DELETE http://localhost:3002/dull/bucket/people/data/andrea
-$ nodemon index --port 3004 --path ./data/node4
+$ mkdir data/node4
+$ dull --port 3004 --path ./data/node4
 $ curl -X POST -d '127.0.0.1:3001' http://localhost:3004/gossip/join
 $ curl -X DELETE http://localhost:3004/gossip/leave
 $ curl http://localhost:3002/dull/bucket/people/keys
