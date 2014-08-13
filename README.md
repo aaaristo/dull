@@ -159,9 +159,13 @@ curl http://<active node>/mnt/<bucket name>/<multilevel-http path>
 ### CRDTs
 http://vimeo.com/43903960
 https://github.com/aphyr/meangirls
+http://docs.basho.com/riak/latest/dev/using/data-types/
 
 ### Tests
 https://github.com/aphyr/jepsen
+
+### Vclock pruning
+http://basho.com/why-vector-clocks-are-hard/
 
 ### Active anti-entropy
 http://en.wikipedia.org/wiki/Merkle_tree
