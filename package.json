@@ -1,7 +1,7 @@
 {
   "name": "dull",
   "version": "0.0.0",
-  "description": "",
+  "description": "Playing around to understand riak",
   "main": "index.js",
   "bin": {
     "dull": "./index.js"
@@ -9,7 +9,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "aaaristo",
   "license": "Apache2",
   "dependencies": {
     "JSONStream": "^0.9.0",
@@ -22,7 +22,7 @@
     "logfmt": "^1.1.2",
     "map-stream": "^0.1.0",
     "mergesort-stream": "0.0.3",
-    "multilevel-http": "0.0.2",
+    "multilevel-http-temp": "0.0.0",
     "optimist": "^0.6.1",
     "request": "^2.39.0",
     "underscore": "^1.6.0",
