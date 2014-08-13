@@ -25,6 +25,7 @@ node.gossip= swimApp.swim;
 require('./server/ring')(app,node,_.extend(argv.ring || {},{ replicas: cap.n }));
 require('./server/buckets')(app,node);
 require('./server/data')(app,node);
+//require('./server/crdt')(app,node);
 
 app.listen(node.port,node.host);
 console.log('listening '+node.string);
