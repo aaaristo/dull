@@ -3,10 +3,10 @@ var mw= require('./middleware'),
     _= require('underscore'),
     async= require('async'),
     multilevel= require('multilevel-http'),
-    merge = require('mergesort-stream'),
-    JSONStream = require('JSONStream'),
-    map   =  require('map-stream'),
-    vectorclock   = require('vectorclock');
+    merge= require('mergesort-stream'),
+    JSONStream= require('JSONStream'),
+    map=  require('map-stream'),
+    vectorclock= require('vectorclock');
 
 const KS= '::';
 
@@ -352,8 +352,12 @@ module.exports= function (app,node)
         async.forEach(node.ring.nodes(),
         function (node,done)
         {
-            streams.push(multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-                                   .valueStream({ start: 'K'+KS, end: ['K','\xff'].join(KS) }));
+            var stream= multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
+                                  .valueStream({ start: 'K'+KS, end: ['K','\xff'].join(KS) });
+
+            stream.node= node;
+            streams.push(stream);
+
             done();
         },
         function ()
@@ -364,7 +368,9 @@ module.exports= function (app,node)
            {
                 stream.on('error', function (err)
                 {
-                    merged.emit('error', err);
+                    console.log('keys',req.params.bucket,stream.node,err);
+                    stream.emit('end'); // if a node is failing we may get the keys from other nodes anyway, so lets try to go on.
+                                        // check if fails >= n ? the failed nodes may be from different partitions..
                 });
            });
 
