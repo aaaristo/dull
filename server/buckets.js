@@ -1,7 +1,7 @@
 var mw= require('./middleware'),
     ut= require('./util'),
     async= require('async'),
-    multilevel= require('multilevel-http'),
+    multilevel= require('multilevel-http-temp'),
     _= require('underscore');
 
 module.exports= function (app,node)
