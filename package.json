@@ -2,6 +2,15 @@
   "name": "dull",
   "version": "0.0.2",
   "description": "Playing around to build a riak-like distributed leveldb",
+  "keywords": [
+    "database",
+    "leveldb",
+    "riak",
+    "distributed",
+    "hashring",
+    "vectorclock",
+    "gossip"
+  ],
   "main": "index.js",
   "bin": {
     "dull": "./index.js"
