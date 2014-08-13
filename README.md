@@ -158,6 +158,7 @@ curl http://<active node>/mnt/<bucket name>/<multilevel-http path>
 
 ### Vclock
 http://basho.com/why-vector-clocks-are-hard/
++ thombstone for deletes
 
 ### CRDTs
 http://vimeo.com/43903960
