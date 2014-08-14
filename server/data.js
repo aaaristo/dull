@@ -2,6 +2,7 @@ var mw= require('./middleware'),
     ut= require('./util'),
     _= require('underscore'),
     async= require('async'),
+    stream= require('stream'),
     uuid= require('node-uuid').v4,
     multilevel= require('multilevel-http-temp'),
     merge= require('mergesort-stream'),
@@ -15,20 +16,55 @@ module.exports= function (app,node,argv)
 {
     var vclock= require('pvclock')(argv.vclock),
         vclockDesc= function (a,b) { return vclock.desc(a.meta.vclock,b.meta.vclock); },
-        compareKeys= function (key1, key2)
+        compareKeys= function (meta1, meta2)
         {
-              if (key1 > key2) return 1;
-              else if (key1 < key2) return -1;
+              if (meta1.key > meta2.key) return 1;
+              else if (meta1.key < meta2.key) return -1;
               return 0;
         },
         unique= function ()
         {
-           var last;
+           var last, metas= [],
+               resolveVclock= function (metas)
+               {
+                   metas.sort(function (a,b) { return vclock.desc(a.vclock,b.vclock); });
 
-           return map(function (data, cb)
+                   var first= metas.shift(), resolved = first ? [first] : [];
+
+                   metas.forEach(function (meta)
+                   {
+                      if (vclock.compare(first.vclock, meta.vclock) == vclock.DIFFERENT)
+                        resolved.push(meta);
+                   });
+
+                   return resolved; 
+               };
+
+           return map(function (meta, cb)
            {
-                last!==data ? cb(null, data) : cb();
-                last= data;
+console.log(meta);
+                if (last==undefined||last.key==meta.key)
+                {
+                   metas.push(meta);
+                   last= meta;
+                   cb();
+                }   
+                else
+                {
+                   var resolved= resolveVclock(metas), first= resolved[0];
+
+                   metas.push(meta);
+                   last= meta;
+
+                   if (resolved.length>1) // conflicts
+                     cb(null, first.key);
+                   else
+                   if (first.thumbstone) // deleted
+                     cb();
+                   else
+                     cb(null, first.key); // resolved
+                }
+                
            });
         },
         readRepair= function (bucket,key,res,siblings)
@@ -66,7 +102,7 @@ module.exports= function (app,node,argv)
                 if (sibling.meta)
                   ops.push.apply(ops,
                    [{ // key
-                          key: ['K',key,res.meta.siblingId].join(KS),
+                          key: ['K',key,sibling.meta.siblingId].join(KS),
                          type: 'del'
                     },
                     { // sibling meta
@@ -400,7 +436,8 @@ module.exports= function (app,node,argv)
         {
             var stream= multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
                                   .valueStream({ start: ['K',''].join(KS),
-                                                   end: ['K',LC].join(KS) });
+                                                   end: ['K',LC].join(KS) })
+                                  .pipe(JSONStream.parse());
 
             stream.node= node;
             streams.push(stream);
@@ -409,8 +446,6 @@ module.exports= function (app,node,argv)
         },
         function ()
         {
-           var merged= merge(compareKeys,streams);
-
            streams.forEach(function (stream)
            {
                 stream.on('error', function (err)
@@ -420,6 +455,15 @@ module.exports= function (app,node,argv)
                                         // check if fails >= n ? the failed nodes may be from different partitions..
                 });
            });
+
+           var endstream = new stream.Stream()
+           endstream.readable = true;
+           streams.push(endstream);
+
+           var merged= merge(compareKeys,streams);
+
+           endstream.emit('data',{ key: LC });
+           endstream.emit('end');
 
            res.type('json');
 
