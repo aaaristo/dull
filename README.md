@@ -31,6 +31,7 @@ $ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http:/
 * `--host <ip address>` (default: `127.0.0.1`): listen address.
 * `--port <port>` (default: `3000`): listen port.
 * `--path <dir>` (default: `./data`): directory to store data files.
+* `--join <active node>` (default: `(empty)`): another node already in the cluster to join it.
 
 ### cap controls
 * `--cap.n <n>` (default: `3`): number of replicas for a given key.

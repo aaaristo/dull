@@ -42,7 +42,6 @@ module.exports= function (app,node,argv)
 
            return map(function (meta, cb)
            {
-console.log(meta);
                 if (last==undefined||last.key==meta.key)
                 {
                    metas.push(meta);
