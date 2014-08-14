@@ -8,11 +8,13 @@ var mw= require('./middleware'),
     JSONStream= require('JSONStream'),
     map=  require('map-stream');
 
-const KS= '::';
+const KS= '::',                   // key separator
+      LC= '\xff';                 // last character
 
 module.exports= function (app,node,argv)
 {
-    var vclock= require('vclock')(argv.vclock),
+    var vclock= require('pvclock')(argv.vclock),
+        vclockDesc= function (a,b) { return vclock.desc(a.meta.vclock,b.meta.vclock); },
         compareKeys= function (key1, key2)
         {
               if (key1 > key2) return 1;
@@ -29,27 +31,48 @@ module.exports= function (app,node,argv)
                 last= data;
            });
         },
-        readRepair= function (bucket,key,res,nodes)
+        readRepair= function (bucket,key,res,siblings)
         {
-            async.forEach(nodes,
-            function (node,done)
+
+            // merge all vclocks
+            res.meta.vclock= vclock.merge(_.union([res.meta.vclock],
+                                          _.collect(siblings,function (s)
+                                          {
+                                             return s.meta ? s.meta.vclock : {};
+                                          })));
+
+            // repair/remove siblings
+            async.forEach(siblings,
+            function (sibling,done)
             {
-                multilevel.client('http://'+node.string+'/mnt/'+bucket+'/')
-                .batch([{ // key
+                var ops= [{ // key
                               key: ['K',key,'_'].join(KS),
                             value: key,
                              type: 'put'
-                        },
-                        { // value meta 
-                              key: ['V',key,'M'].join(KS),
-                            value: JSON.stringify(_.extend(res.meta,{ vclock: vclock.merge(node.vclock,res.meta.vclock) })),
+                          },
+                          { // value meta 
+                              key: ['V',key,res.meta.siblingId,'M'].join(KS),
+                            value: JSON.stringify(res.meta),
                              type: 'put'
-                        },
-                        { // value content
-                              key: ['V',key,'C'].join(KS),
+                          },
+                          { // value content
+                              key: ['V',key,res.meta.siblingId,'C'].join(KS),
                             value: res.content,
                              type: 'put'
-                        }],
+                          }];
+
+                if (sibling.meta)
+                  ops.push.apply(ops,
+                    [{ // sibling meta
+                          key: ['V',key,sibling.meta.siblingId,'M'].join(KS),
+                         type: 'del'
+                    },
+                    { // sibling content
+                          key: ['V',key,sibling.meta.siblingId,'C'].join(KS),
+                         type: 'del'
+                    }]);
+
+                multilevel.client('http://'+sibling.node+'/mnt/'+bucket+'/').batch(ops,
                 function (err,res)
                 {
                    if (err)
@@ -72,6 +95,7 @@ module.exports= function (app,node,argv)
             w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,n),
             errors= [],
+            siblingId= uuid(),
             client= {
                        id: req.headers['x-dull-clientid'] ? req.headers['x-dull-clientid'] : uuid(),
                        vclock: req.headers['x-dull-vclock'] ? JSON.parse(req.headers['x-dull-vclock']) : {}
@@ -97,21 +121,22 @@ module.exports= function (app,node,argv)
                          type: 'put'
                     },
                     { // value meta 
-                          key: ['V',req.params.key,'M'].join(KS),
+                          key: ['V',req.params.key,siblingId,'M'].join(KS),
                         value: JSON.stringify
                                ({ 
-                                 vclock: vclock.increment(client.vclock,client.id),
-                                   hash: ut.hash(req.binary),
-                                headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
-                                         { 
-                                            'content-type': 'application/json',
-                                            'content-length': req.binary.length
-                                         })
+                                  siblingId: siblingId,
+                                     vclock: vclock.increment(client.vclock,client.id),
+                                       hash: ut.hash(req.binary),
+                                    headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
+                                             { 
+                                                'content-type': 'application/json',
+                                                'content-length': req.binary.length
+                                             })
                                }),
                          type: 'put'
                     },
                     { // value content
-                          key: ['V',req.params.key,'C'].join(KS),
+                          key: ['V',req.params.key,siblingId,'C'].join(KS),
                         value: req.headers['content-type']!='application/json' ? req.binary.toString('base64') : req.binary.toString('utf8'),
                          type: 'put' 
                     }],
@@ -144,16 +169,13 @@ module.exports= function (app,node,argv)
             success= _.after(r,_.once(function () // after r replicas respond, return to the client
                      {
                            var found= _.filter(responses,function (r) { return !r.notfound; });
-                           found.sort(vectorclock.descSort); 
+                           found.sort(vclockDesc);
 
                            var first= found.shift(), repaired = first ? [first] : [];
 
                            found.forEach(function (response, index)
                            {
-                              // if they are concurrent with that item, then there is a conflict
-                              // that we cannot resolve, so we need to return the item.
-                              if (vectorclock.isConcurrent(first, response)
-                                  && !vectorclock.isIdentical(response, first))
+                              if (vclock.compare(first.meta.vclock, response.meta.vclock) == vclock.DIFFERENT)
                                 repaired.push(response);
                            });
 
@@ -177,10 +199,12 @@ module.exports= function (app,node,argv)
                            }
                            else
                            { 
-                               var parts= [];
+                               var parts= [], vclocks= [];
 
                                repaired.forEach(function (response)
                                {
+                                  vclocks.push(response.meta.vclock);
+
                                   parts.push
                                   ({
                                       headers: _.extend(response.meta.headers,
@@ -192,6 +216,7 @@ module.exports= function (app,node,argv)
                                });
 
                                res.status(300);
+                               res.setHeader('x-dull-vclock', JSON.stringify(vclock.merge(vclocks)));
                                ut.multipart(res,parts);
                            }
                      }));
@@ -206,27 +231,29 @@ module.exports= function (app,node,argv)
         function (node,done)
         {
             var parts= [];
+                console.log(node);
 
             multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-            .valueStream({ start: ['V',req.params.key,'C'].join(KS),
-                             end: ['V',req.params.key,'M'].join(KS) })
+            .valueStream({ start: ['V',req.params.key,''].join(KS),
+                             end: ['V',req.params.key,LC].join(KS) })
             .on('error', function (err)
             {
-               errors.push({ node: node, err: err });
+                errors.push({ node: node, err: err });
             })
             .on('data', function (data)
             {
-               parts.push(data); 
+                parts.push(data); 
             })
             .on('end', function ()
             {
-                if (parts.length!=2)
+                if (parts.length<2)
                     responses.push({ node: node, notfound: true });
                 else
-                {
-                    var meta= JSON.parse(parts[1]);
-                    responses.push({ node: node, clock: meta.vclock, meta: meta, content: parts[0] });
-                }
+                    for (var n=0;n<parts.length;n+=2)
+                    {
+                        var meta= JSON.parse(parts[n+1]);
+                        responses.push({ node: node, meta: meta, content: parts[n] });
+                    }
 
                 success();
                 done();
@@ -243,21 +270,19 @@ module.exports= function (app,node,argv)
            {
                // we might have more responses so lets re-resolve vclocks
                var found= _.filter(responses,function (r) { return !r.notfound; });
-               found.sort(vectorclock.descSort); 
+               found.sort(vclockDesc); 
 
                var first= found.shift(), repaired = first ? [first] : [], needRepair= [];
 
                found.forEach(function (response, index)
                {
-                  var cmp= vectorclock.compare(first, response); 
+                  var cmp= vclock.compare(first.meta.vclock, response.meta.vclock); 
 
-                  // if they are concurrent with that item, then there is a conflict
-                  // that we cannot resolve, so we need to return the item.
-                  if (cmp==0 && !vectorclock.isIdentical(response, first))
+                  if (cmp==vclock.DIFFERENT)
                     repaired.push(response);
                   else                  
                   if (cmp==1)
-                    needRepair.push({ string: response.node, vclock: response.meta.vclock });
+                    needRepair.push({ node: response.node, meta: response.meta });
                });
 
                if (repaired.length==1) // we have a value
@@ -266,7 +291,7 @@ module.exports= function (app,node,argv)
 
                  notfound.forEach(function (res)
                  { 
-                    needRepair.push({ string: res.node, vclock: {} });
+                    needRepair.push({ node: res.node });
                  });
 
                  if (needRepair.length>0)
@@ -329,29 +354,6 @@ module.exports= function (app,node,argv)
 
     });
 
-    app.get('/dull/bucket/:bucket/approximateSize/:from..:to', function (req, res, next)
-    {
-        var size= 0;
-
-        async.forEach(node.ring.nodes(),
-        function (node,done)
-        {
-            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-            .approximateSize(req.params.from,req.params.to,function (err,size)
-            {
-                if (!err) size+= size; 
-                done(err); 
-            });
-        },
-        function (err)
-        {
-           if (err)
-             next(err);
-           else
-             res.send(size);
-        });
-    });
-
     app.get('/dull/bucket/:bucket/keys', function (req, res, next)
     {
         var streams= [];
@@ -360,7 +362,8 @@ module.exports= function (app,node,argv)
         function (node,done)
         {
             var stream= multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
-                                  .valueStream({ start: 'K'+KS, end: ['K','\xff'].join(KS) });
+                                  .valueStream({ start: ['K',''].join(KS),
+                                                   end: ['K',LC].join(KS) });
 
             stream.node= node;
             streams.push(stream);

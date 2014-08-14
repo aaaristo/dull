@@ -34,7 +34,7 @@
     "optimist": "^0.6.1",
     "request": "^2.39.0",
     "underscore": "^1.6.0",
-    "pvclock": "0.0.1",
+    "pvclock": "0.0.2",
     "node-uuid": "^1.4.1"
   }
 }
