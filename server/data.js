@@ -2,6 +2,7 @@ var mw= require('./middleware'),
     ut= require('./util'),
     _= require('underscore'),
     async= require('async'),
+    uuid= require('node-uuid').v4,
     multilevel= require('multilevel-http-temp'),
     merge= require('mergesort-stream'),
     JSONStream= require('JSONStream'),
@@ -41,7 +42,7 @@ module.exports= function (app,node,argv)
                         },
                         { // value meta 
                               key: ['V',key,'M'].join(KS),
-                            value: JSON.stringify(_.extend(res.meta,{ vclock: vectorclock.merge(node.vclock,res.meta.vclock) })),
+                            value: JSON.stringify(_.extend(res.meta,{ vclock: vclock.merge(node.vclock,res.meta.vclock) })),
                              type: 'put'
                         },
                         { // value content
@@ -71,7 +72,10 @@ module.exports= function (app,node,argv)
             w= req.query.w || node.cap.w,
             nodes= node.ring.range(req.params.key,n),
             errors= [],
-            currentNode= node.string,
+            client= {
+                       id: req.headers['x-dull-clientid'] ? req.headers['x-dull-clientid'] : uuid(),
+                       vclock: req.headers['x-dull-vclock'] ? JSON.parse(req.headers['x-dull-vclock']) : {}
+                    },
             success= _.after(w,_.once(function ()
                      {
                          res.end();
@@ -96,7 +100,7 @@ module.exports= function (app,node,argv)
                           key: ['V',req.params.key,'M'].join(KS),
                         value: JSON.stringify
                                ({ 
-                                 vclock: vectorclock.increment(req.headers['x-dull-vclock'] ? JSON.parse(req.headers['x-dull-vclock']) : {},currentNode),
+                                 vclock: vclock.increment(client.vclock,client.id),
                                    hash: ut.hash(req.binary),
                                 headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
                                          { 
