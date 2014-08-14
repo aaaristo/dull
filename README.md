@@ -165,6 +165,7 @@ curl http://<active node>/mnt/<bucket name>/<multilevel-http path>
 ### Vclock
 http://basho.com/why-vector-clocks-are-hard/
 * vclock header compression
+* better doc for thumbstone / key existence / x-dull-vclock
 
 ### CRDTs
 http://vimeo.com/43903960
