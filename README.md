@@ -37,6 +37,12 @@ $ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http:/
 * `--cap.r <r>` (default: `2`): number of replicas that should respond to a read request, for it to be considered successful.
 * `--cap.w <w>` (default: `2`): number of replicas that should respond to a write request, for it to be considered successful.
 
+### vector clocks options
+* `--vclock.small <n>` (default: `10`): number of entries to consider a vector clock small.
+* `--vclock.big <n>` (default: `50`): number of entries to consider a vector clock big.
+* `--vclock.young <n>` (default: `20`): max number of seconds to consider a vector clock entry young.
+* `--vclock.old <n>` (default: `86400`): min number of seconds to consider a vector clock entry old.
+
 ### ring options (hashring)
 * `--ring.vnode_count <n>` (default: `40`): The amount of virtual nodes per server.
 * `--ring.max_cache_size <n>` (default: `5000`): We use a simple LRU cache inside the module to speed up frequent key lookups, you can customize the amount of keys that need to be cached.
