@@ -41,18 +41,20 @@ module.exports= function (app,node,argv)
                                              return s.meta ? s.meta.vclock : {};
                                           })));
 
+            var meta= JSON.stringify(res.meta);
+
             // repair/remove siblings
             async.forEach(siblings,
             function (sibling,done)
             {
                 var ops= [{ // key
-                              key: ['K',key,'_'].join(KS),
-                            value: key,
+                              key: ['K',key,res.meta.siblingId].join(KS),
+                            value: meta,
                              type: 'put'
                           },
                           { // value meta 
                               key: ['V',key,res.meta.siblingId,'M'].join(KS),
-                            value: JSON.stringify(res.meta),
+                            value: meta,
                              type: 'put'
                           },
                           { // value content
@@ -63,7 +65,11 @@ module.exports= function (app,node,argv)
 
                 if (sibling.meta)
                   ops.push.apply(ops,
-                    [{ // sibling meta
+                   [{ // key
+                          key: ['K',key,res.meta.siblingId].join(KS),
+                         type: 'del'
+                    },
+                    { // sibling meta
                           key: ['V',key,sibling.meta.siblingId,'M'].join(KS),
                          type: 'del'
                     },
@@ -114,25 +120,28 @@ module.exports= function (app,node,argv)
         async.forEach(nodes,
         function (node,done)
         {
+            var meta= JSON.stringify
+                       ({ 
+                                key: req.params.key,
+                          siblingId: siblingId,
+                             vclock: vclock.increment(client.vclock,client.id),
+                               hash: ut.hash(req.binary),
+                            headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
+                                     { 
+                                        'content-type': 'application/json',
+                                        'content-length': req.binary.length
+                                     })
+                       });
+
             multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
             .batch([{ // key
-                          key: ['K',req.params.key,'_'].join(KS),
-                        value: req.params.key,
+                          key: ['K',req.params.key,siblingId].join(KS),
+                        value: meta,
                          type: 'put'
                     },
                     { // value meta 
                           key: ['V',req.params.key,siblingId,'M'].join(KS),
-                        value: JSON.stringify
-                               ({ 
-                                  siblingId: siblingId,
-                                     vclock: vclock.increment(client.vclock,client.id),
-                                       hash: ut.hash(req.binary),
-                                    headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
-                                             { 
-                                                'content-type': 'application/json',
-                                                'content-length': req.binary.length
-                                             })
-                               }),
+                        value: meta,
                          type: 'put'
                     },
                     { // value content
@@ -185,17 +194,26 @@ module.exports= function (app,node,argv)
                            else
                            if (repaired.length==1)
                            {
-                               _.keys(first.meta.headers).forEach(function (name)
+                               if (first.meta.thumbstone) // has been deleted
                                {
-                                   res.setHeader(name,first.meta.headers[name]);
-                               });
-
-                               res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
-
-                               if (first.meta.headers['content-type']=='application/json')
-                                 res.end(first.content);
+                                   res.status(404);
+                                   res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock)); // if you want to recreate it better to use the vclock
+                                   res.send('Key not found');
+                               }
                                else
-                                 res.end(new Buffer(first.content,'base64'));
+                               {
+                                   _.keys(first.meta.headers).forEach(function (name)
+                                   {
+                                       res.setHeader(name,first.meta.headers[name]);
+                                   });
+
+                                   res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
+
+                                   if (first.meta.headers['content-type']=='application/json')
+                                     res.end(first.content);
+                                   else
+                                     res.end(new Buffer(first.content,'base64'));
+                               }
                            }
                            else
                            { 
@@ -207,10 +225,13 @@ module.exports= function (app,node,argv)
 
                                   parts.push
                                   ({
-                                      headers: _.extend(response.meta.headers,
-                                                        { 'x-dull-vclock': JSON.stringify(response.meta.vclock) },
-                                                        response.meta.headers['content-type']!='application/json' ? 
-                                                        { 'Content-Transfer-Encoding': 'base64' } : undefined),
+                                      headers: response.meta.thumbstone ?
+                                                { 'x-dull-vclock': JSON.stringify(response.meta.vclock),
+                                                  'x-dull-thumbstone': 'true' } :
+                                                        _.extend(response.meta.headers,
+                                                            { 'x-dull-vclock': JSON.stringify(response.meta.vclock) },
+                                                            response.meta.headers['content-type']!='application/json' ? 
+                                                            { 'Content-Transfer-Encoding': 'base64' } : undefined),
                                       body: response.content
                                   });
                                });
@@ -307,6 +328,11 @@ module.exports= function (app,node,argv)
             w= req.query.w || node.cap.w,
             nodes= node.ring.nodes(), // we may have keys on any server if the hashring changed
             errors= [],
+            siblingId= uuid(),
+            client= {
+                       id: req.headers['x-dull-clientid'] ? req.headers['x-dull-clientid'] : uuid(),
+                       vclock: req.headers['x-dull-vclock'] ? JSON.parse(req.headers['x-dull-vclock']) : {}
+                    },
             success= _.after(w,_.once(function ()
                      {
                          res.end();
@@ -321,18 +347,29 @@ module.exports= function (app,node,argv)
         async.forEach(nodes,
         function (node,done)
         {
+            var meta= JSON.stringify
+                      ({
+                                key: req.params.key,
+                          siblingId: siblingId,
+                             vclock: vclock.increment(client.vclock,client.id),
+                         thumbstone: true
+                      });
+
             multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/')
             .batch([{ // key
-                          key: ['K',req.params.key,'_'].join(KS),
-                         type: 'del'
+                          key: ['K',req.params.key,siblingId].join(KS),
+                        value: meta,
+                         type: 'put'
                     },
                     { // value meta 
-                          key: ['V',req.params.key,'M'].join(KS),
-                         type: 'del'
+                          key: ['V',req.params.key,siblingId,'M'].join(KS),
+                        value: meta,
+                         type: 'put'
                     },
                     { // value content
-                          key: ['V',req.params.key,'C'].join(KS),
-                         type: 'del' 
+                          key: ['V',req.params.key,siblingId,'C'].join(KS),
+                        value: '#',
+                         type: 'put' 
                     }],
             function (err,res)
             {
