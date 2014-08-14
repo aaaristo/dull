@@ -5,14 +5,14 @@ var mw= require('./middleware'),
     multilevel= require('multilevel-http-temp'),
     merge= require('mergesort-stream'),
     JSONStream= require('JSONStream'),
-    map=  require('map-stream'),
-    vectorclock= require('vectorclock');
+    map=  require('map-stream');
 
 const KS= '::';
 
-module.exports= function (app,node)
+module.exports= function (app,node,argv)
 {
-    var compareKeys= function (key1, key2)
+    var vclock= require('vclock')(argv.vclock),
+        compareKeys= function (key1, key2)
         {
               if (key1 > key2) return 1;
               else if (key1 < key2) return -1;
