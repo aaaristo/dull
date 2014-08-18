@@ -156,7 +156,8 @@ curl -X PUT -d <value> -H 'Content-Type: <value type>' -H 'x-dull-vclock: {"127.
 
 Deleted objects are marked with a thumbstone record that may be in conflict with a put
 if you don't pass in a vector-clock. This thumbstone record is also used when generating keys:
-dull will return only non-delted keys as one would expect, resolving those vector clocks.
+dull will return only non-deleted keys as one would expect, resolving those vector clocks.
+It will return also keys that has conflicts, so that the client may have the chance to decide it.
 
 #### list all keys known to dull
 ```
