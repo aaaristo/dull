@@ -142,6 +142,22 @@ those are used in read-repair.
 curl -X DELETE http://<active node>/dull/bucket/<bucket name>/data/<key>
 ```
 
+you will get an header x-dull-vclock like this:
+
+```
+x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}
+```
+
+that you should pass back if you want to recreate the value like this:
+
+```
+curl -X PUT -d <value> -H 'Content-Type: <value type>' -H 'x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}' http://<active node>/dull/bucket/<bucket name>/data/<key>
+```
+
+Deleted objects are marked with a thumbstone record that may be in conflict with a put
+if you don't pass in a vector-clock. This thumbstone record is also used when generating keys:
+dull will return only non-delted keys as one would expect, resolving those vector clocks.
+
 #### list all keys known to dull
 ```
 curl http://<active node>/dull/bucket/<bucket name>/keys
