@@ -164,6 +164,22 @@ It will return also keys that has conflicts, so that the client may have the cha
 curl http://<active node>/dull/bucket/<bucket name>/keys
 ```
 
+### custom http headers
+
+#### x-dull-clientid
+
+Used to identify the actor in vector clocks, if no actor is passed in
+an uuid is used.
+
+#### x-dull-vclock
+
+used to pass vclocks between client and the server: the server will return
+a vector clock in read or delete of a key, that should be used to modify the key.
+
+#### x-dull-thumbstone
+
+it is used to identify a deleted key sibling on a 303 response.
+
 ### Access to any node leveldb
 
 You can check [multilevel-http](https://github.com/juliangruber/multilevel-http#http-api)
@@ -183,7 +199,6 @@ curl http://<active node>/mnt/<bucket name>/<multilevel-http path>
 ### Vclock
 http://basho.com/why-vector-clocks-are-hard/
 * vclock header compression
-* better doc for thumbstone / key existence / x-dull-vclock / x-dull-clientid
 
 ### CRDTs
 http://vimeo.com/43903960
