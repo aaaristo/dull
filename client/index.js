@@ -1,4 +1,4 @@
-var request= require('request'),
+var request= require('../node_modules/multilevel-http-temp/lib/request')(),
     JSONStream= require('JSONStream'),
     _= require('underscore'),
     swim= require('express-swim');
@@ -155,7 +155,7 @@ module.exports= function (clientProcessId,seed,opts)
                 qs: opts || {},
                 timeout: TIMEOUT
              })
-             .pipe(JSONStream.parse);
+             .pipe(JSONStream.parse());
          };
 
          return client;

@@ -1,7 +1,15 @@
 var _= require('underscore'),
+    merge= require('mergesort-stream'),
+    stream= require('stream'),
     async= require('async');
 
-const LC= '\xff',                 // last character
+const LC= '\xff',  // last character
+      compareKeys= function (meta1, meta2)
+      {
+          if (meta1.key > meta2.key) return 1;
+          else if (meta1.key < meta2.key) return -1;
+          return 0;
+      },
       atLeast= function (n,nodes,iterator,least,all)
       {
           var errors= [],

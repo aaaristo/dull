@@ -2,9 +2,7 @@ var mw= require('./middleware'),
     ut= require('./util'),
     _= require('underscore'),
     async= require('async'),
-    stream= require('stream'),
     uuid= require('node-uuid').v4,
-    merge= require('mergesort-stream'),
     JSONStream= require('JSONStream'),
     map=  require('map-stream');
 
@@ -15,12 +13,6 @@ module.exports= function (app,node,argv)
         coord= require('./coordinator')(node,sibOpts),
         vclock= require('pvclock')(argv.vclock),
         vclockDesc= function (a,b) { return vclock.desc(a.meta.vclock,b.meta.vclock); },
-        compareKeys= function (meta1, meta2)
-        {
-              if (meta1.key > meta2.key) return 1;
-              else if (meta1.key < meta2.key) return -1;
-              return 0;
-        },
         unique= function ()
         {
            var last, metas= [],

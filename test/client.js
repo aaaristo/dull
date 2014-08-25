@@ -37,6 +37,18 @@ describe('client',function ()
          });
      });
 
+     it('can get keys',function (done)
+     {
+         client('Alice').createKeyStream('notes')
+                        .on('error',done)
+                        .on('data',function (data)
+                        {
+                            if (data!='date')
+                              done('Wrong key');
+                        })
+                        .on('end',done);
+     });
+
      it('can delete the kv',function (done)
      {
          client('Alice').del('notes','date',null,function (err)
