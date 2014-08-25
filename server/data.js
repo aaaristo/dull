@@ -95,12 +95,13 @@ module.exports= function (app,node,argv)
     function (req,res,next)
     {
         var siblingId= uuid(),
+            vc= vclock.increment(req.client.vclock,
+                                 req.client.id),
             meta= JSON.stringify
                   ({ 
                             key: req.params.key,
                       siblingId: siblingId,
-                         vclock: vclock.increment(req.client.vclock,
-                                                  req.client.id),
+                         vclock: vc,
                            hash: ut.hash(req.binary),
                         headers: _.defaults(_.pick(req.headers,['content-type',                                                                'content-length']),
                                  { 
@@ -117,6 +118,7 @@ module.exports= function (app,node,argv)
              .perform(req.params.w,
               function () // w nodes
               {
+                 res.setHeader('x-dull-vclock',JSON.stringify(vc));
                  res.end();
               },
               function (err,errors) // n nodes
@@ -246,12 +248,13 @@ module.exports= function (app,node,argv)
     function (req,res)
     {
         var siblingId= uuid(),
+            vc= vclock.increment(req.client.vclock,
+                                 req.client.id),
             meta= JSON.stringify
                   ({
                             key: req.params.key,
                       siblingId: siblingId,
-                         vclock: vclock.increment(req.client.vclock,
-                                                  req.client.id),
+                         vclock: vc,
                      thumbstone: true
                   });
             
@@ -260,6 +263,7 @@ module.exports= function (app,node,argv)
              .perform(req.params.w,
               function () // w nodes
               {
+                 res.setHeader('x-dull-vclock',JSON.stringify(vc));
                  res.end();
               },
               function (err,errors) // all nodes

@@ -34,11 +34,12 @@ exports.hash= function (value)
    return crypto.createHash('sha1').update(value).digest('hex');
 };
 
-const BOUNDARY= '\n--'+exports.hash('dull-boundary')+'\n';
+const BOUND= exports.hash('dull-boundary'),
+      BOUNDARY= '\n--'+BOUND+'\n';
 
 exports.multipart= function (res,parts)
 {
-   res.setHeader('Content-Type','Multipart/mixed; boundary="'+BOUNDARY+'";');
+   res.setHeader('Content-Type','Multipart/mixed; boundary="'+BOUND+'";');
    res.write(BOUNDARY);
    
    parts.forEach(function (part)

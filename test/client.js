@@ -1,4 +1,5 @@
-var client= require('..').client('test-process','127.0.0.1:3000');
+var _= require('underscore'),
+    client= require('..').client('test-process','127.0.0.1:3000');
 
 var should= require('chai').should(),
     assert= require('chai').assert;
@@ -20,7 +21,7 @@ describe('client',function ()
 
      it('can put a kv',function (done)
      {
-         client('Alice').put('notes','date','Wednesday',null,function (err)
+         client('Alice').put('notes','basic','Wednesday',null,function (err)
          {
              done(err);
          });
@@ -28,7 +29,7 @@ describe('client',function ()
 
      it('can get the kv',function (done)
      {
-         client('Alice').get('notes','date',function (err,value,meta)
+         client('Alice').get('notes','basic',function (err,value,meta)
          {
              if (err) return done(err);
 
@@ -43,7 +44,7 @@ describe('client',function ()
                         .on('error',done)
                         .on('data',function (data)
                         {
-                            if (data!='date')
+                            if (data!='basic')
                               done('Wrong key');
                         })
                         .on('end',done);
@@ -51,7 +52,7 @@ describe('client',function ()
 
      it('can delete the kv',function (done)
      {
-         client('Alice').del('notes','date',null,function (err)
+         client('Alice').del('notes','basic',null,function (err)
          {
              done(err);
          });
@@ -92,4 +93,72 @@ describe('client',function ()
              });
          });
      });  
+
+     it('can resolve siblings',function (done)
+     {
+         // http://basho.com/why-vector-clocks-are-hard/
+
+         var alice= client('Alice'),
+             ben= client('Ben'),
+             cathy= client('Cathy'),
+             dave= client('Dave');
+
+         alice.put('notes','date','Wednesday',null,
+         function (err,meta)
+         {
+             if (err) return done(err);
+
+             var conflict= _.after(2,function ()
+                 {
+                     dave.get('notes','date',
+                     function (err,value,meta)
+                     {
+                         if (err) return done(err);
+
+                         dave.put('notes','date',value,meta,
+                         function (err,meta)
+                         {
+                             if (err) return done(err);
+
+                             cathy.get('notes','date',
+                             function (err,value,meta)
+                             {
+                                 if (err) return done(err);
+
+                                 'Thursday'.should.equal(value);
+                                 done();
+                             },
+                             should.not.exist);
+                         });
+                     },
+                     function (siblings) // resolve
+                     {
+                         siblings.length.should.equal(2);
+                         _.pluck(siblings,'content').should.contain('Tuesday');
+                         _.pluck(siblings,'content').should.contain('Thursday');
+                         return 'Thursday';
+                     });
+                 });
+
+             ben.put('notes','date','Tuesday',meta,
+             function (err,meta)
+             {
+                 if (err) return done(err);
+
+                 dave.put('notes','date','Tuesday',meta,
+                 function (err,meta)
+                 {
+                     if (err) return done(err);
+
+                     conflict();
+                 });
+             });
+
+             cathy.put('notes','date','Thursday',meta,
+             function (err,meta)
+             {
+                 conflict();
+             });
+         });
+     });
 });

@@ -1,4 +1,6 @@
-var request= require('../node_modules/multilevel-http-temp/lib/request')(),
+var request= require('request'), 
+    lrequest= require('./request')(),
+    ut= require('./util'),
     JSONStream= require('JSONStream'),
     _= require('underscore'),
     swim= require('express-swim');
@@ -12,6 +14,15 @@ module.exports= function (clientProcessId,seed,opts)
          node= function ()
          {
             return gossip.rnodes()[0] || seed;
+         },
+         siblings= function (parts)
+         {
+            return _.collect(parts,function (p)
+            {
+                var json= p.headers['content-type']=='application/json';
+                return { meta: { vclock: JSON.parse(p.headers['x-dull-vclock']) }, 
+                      content: json ? JSON.parse(p.body) : p.body };
+            });
          };
 
      // gossip.join(seed);
@@ -89,9 +100,9 @@ module.exports= function (clientProcessId,seed,opts)
                   cb(err);
                 else
                 if (res.statusCode!=200)
-                  cb(body,buildMeta(res));
+                  cb(body);
                 else
-                  cb();
+                  cb(null,buildMeta(res));
              });
          };
 
@@ -117,18 +128,18 @@ module.exports= function (clientProcessId,seed,opts)
                if (res.statusCode==404)
                  cb({ notfound: true });
                else
-               if (res.statusCode==303)
+               if (res.statusCode==300)
                {
-                 var resolved= resolve ? resolve(ut.multipart.parse(res))
+                 var resolved= resolve ? resolve(siblings(ut.multipart(res,body)))
                                        : undefined;
 
                  if (resolved!==undefined)
-                   cb(null,resolved);
+                   cb(null,resolved,buildMeta(res));
                  else
                    cb(new Error('Cannot resolve siblings'));
                }
                else
-                 cb(body);
+                 cb(body.toString('utf8'));
             });
          };
 
@@ -147,15 +158,15 @@ module.exports= function (clientProcessId,seed,opts)
                   cb(err);
                 else
                 if (res.statusCode!=200)
-                  cb(body,buildMeta(res));
+                  cb(body);
                 else
-                  cb();
+                  cb(null,buildMeta(res));
              });
          };
 
          client.createKeyStream= function (bucket,opts)
          {
-             return request.stream
+             return lrequest.stream
              ({
                 uri: 'http://'+node()+'/bucket/'
                      +bucket+'/keys',
