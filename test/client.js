@@ -36,4 +36,12 @@ describe('client',function ()
              done();
          });
      });
+
+     it('can delete the kv',function (done)
+     {
+         client('Alice').del('notes','date',null,function (err)
+         {
+             done(err);
+         });
+     });
 });

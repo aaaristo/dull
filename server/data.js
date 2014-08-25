@@ -178,6 +178,7 @@ module.exports= function (app,node,argv)
                {
                    res.status(404);
                    res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock)); // if you want to recreate it better to use the vclock
+                   res.setHeader('x-dull-thumbstone', 'true');
                    res.send('Key not found');
                }
                else

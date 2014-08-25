@@ -23,8 +23,8 @@ module.exports= function (clientProcessId,seed,opts)
              {
                 meta= meta||{};
 
-                return _.extend({ 'x-dull-clientid': id,
-                                  'content-type': value.constructor.name=='Buffer' ? 'application/octet-stream' : 'application/json' },
+                return _.extend({ 'x-dull-clientid': id },
+                                value ? { 'content-type': value.constructor.name=='Buffer' ? 'application/octet-stream' : 'application/json' } : undefined,
                                 meta.vclock ?
                                 { 'x-dull-vclock': JSON.stringify(meta.vclock) }
                                 : undefined);
