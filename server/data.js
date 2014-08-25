@@ -12,27 +12,13 @@ module.exports= function (app,node,argv)
         sib= require('./sibling')(sibOpts),
         coord= require('./coordinator')(node,sibOpts),
         vclock= require('pvclock')(argv.vclock),
-        vclockDesc= function (a,b) { return vclock.desc(a.meta.vclock,b.meta.vclock); },
+        pickVclock= function (res)
+        {
+           return res.meta.vclock;
+        },
         unique= function ()
         {
-           var last, metas= [],
-               resolveVclock= function (metas)
-               {
-                   metas.sort(function (a,b)
-                   { 
-                      return vclock.desc(a.vclock,b.vclock);
-                   });
-
-                   var first= metas.shift(), resolved = first ? [first] : [];
-
-                   metas.forEach(function (meta)
-                   {
-                      if (vclock.conflicting(first.vclock, meta.vclock))
-                        resolved.push(meta);
-                   });
-
-                   return resolved; 
-               };
+           var last, metas= [];
 
            return map(function (meta, cb)
            {
@@ -44,12 +30,14 @@ module.exports= function (app,node,argv)
                 }   
                 else
                 {
-                   var resolved= resolveVclock(metas), first= resolved[0];
+                   var converged= vclock.converge(metas,'vclock'),
+                       first= converged[0];
 
+                   metas= [];
                    metas.push(meta);
                    last= meta;
 
-                   if (resolved.length>1) // conflicts
+                   if (converged.length>1) // conflicts
                      cb(null, first.key);
                    else
                    if (first.thumbstone) // deleted
@@ -145,106 +133,110 @@ module.exports= function (app,node,argv)
     node.buckets.get,
     function (req, res, next)
     {
+        var buildResponse= function (converged)
+            {
+               var first= converged[0];
+
+               if (converged.length==0)
+                 res.status(404).send('Key not found');
+               else
+               if (converged.length==1)
+               {
+                   if (first.meta.thumbstone) // has been deleted
+                   {
+                       res.status(404);
+                       res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock)); // if you want to recreate it better to use the vclock
+                       res.setHeader('x-dull-thumbstone', 'true');
+                       res.send('Key not found');
+                   }
+                   else
+                   {
+                       _.keys(first.meta.headers).forEach(function (name)
+                       {
+                           res.setHeader(name,first.meta.headers[name]);
+                       });
+
+                       res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
+
+                       if (first.meta.headers['content-type']=='application/json')
+                         res.end(first.content);
+                       else
+                         res.end(new Buffer(first.content,'base64'));
+                   }
+               }
+               else
+               { 
+                   var parts= [], vclocks= [];
+
+                   converged.forEach(function (response)
+                   {
+                      vclocks.push(response.meta.vclock);
+
+                      parts.push
+                      ({
+                          headers: response.meta.thumbstone ?
+                                    { 'x-dull-vclock': JSON.stringify(response.meta.vclock),
+                                      'x-dull-thumbstone': 'true' } :
+                                            _.extend(response.meta.headers,
+                                                { 'x-dull-vclock': JSON.stringify(response.meta.vclock) },
+                                                response.meta.headers['content-type']!='application/json' ? 
+                                                { 'Content-Transfer-Encoding': 'base64' } : undefined),
+                          body: response.content
+                      });
+                   });
+
+                   res.status(300);
+                   res.setHeader('x-dull-vclock', JSON.stringify(vclock.merge(vclocks)));
+                   ut.multipart(res,parts);
+               }
+            };
+
         coord.list(req.params.r,
                    req.bucket,
                    req.params.key,
         function (responses) // r nodes responded
         {
-           var found= _.filter(responses,function (r) { return !r.notfound; })
-                       .sort(vclockDesc),
-               first= found.shift(),
-               repaired = first ? [first] : [];
-
-           found.forEach(function (response, index)
-           {
-              if (vclock.conflicting(first.meta.vclock, response.meta.vclock))
-                repaired.push(response);
-           });
-           
-           if (repaired.length==0)
-             res.status(404).send('Key not found');
-           else
-           if (repaired.length==1)
-           {
-               if (first.meta.thumbstone) // has been deleted
-               {
-                   res.status(404);
-                   res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock)); // if you want to recreate it better to use the vclock
-                   res.setHeader('x-dull-thumbstone', 'true');
-                   res.send('Key not found');
-               }
-               else
-               {
-                   _.keys(first.meta.headers).forEach(function (name)
-                   {
-                       res.setHeader(name,first.meta.headers[name]);
-                   });
-
-                   res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
-
-                   if (first.meta.headers['content-type']=='application/json')
-                     res.end(first.content);
-                   else
-                     res.end(new Buffer(first.content,'base64'));
-               }
-           }
-           else
-           { 
-               var parts= [], vclocks= [];
-
-               repaired.forEach(function (response)
-               {
-                  vclocks.push(response.meta.vclock);
-
-                  parts.push
-                  ({
-                      headers: response.meta.thumbstone ?
-                                { 'x-dull-vclock': JSON.stringify(response.meta.vclock),
-                                  'x-dull-thumbstone': 'true' } :
-                                        _.extend(response.meta.headers,
-                                            { 'x-dull-vclock': JSON.stringify(response.meta.vclock) },
-                                            response.meta.headers['content-type']!='application/json' ? 
-                                            { 'Content-Transfer-Encoding': 'base64' } : undefined),
-                      body: response.content
-                  });
-               });
-
-               res.status(300);
-               res.setHeader('x-dull-vclock', JSON.stringify(vclock.merge(vclocks)));
-               ut.multipart(res,parts);
-           }
-        },
-        function () // n nodes responded
-        {
-           // we might have more responses so lets re-resolve vclocks
            var found= _.filter(responses,function (r) { return !r.notfound; });
-           found.sort(vclockDesc); 
 
-           var first= found.shift(), repaired = first ? [first] : [], needRepair= [];
-
-           found.forEach(function (response, index)
+           buildResponse(vclock.converge(found,pickVclock));
+        },
+        function (err, responses) // n nodes responded
+        {
+           if (err)
            {
-              var cmp= vclock.compare(first.meta.vclock, response.meta.vclock); 
-
-              if (cmp==vclock.CONFLICTING)
-                repaired.push(response);
-              else                  
-              if (cmp==vclock.GT)
-                needRepair.push({ node: response.node, meta: response.meta });
-           });
-
-           if (repaired.length==1) // we have a value
-           {
-             var notfound= _.filter(responses,function (r) { return !!r.notfound; });
-
-             notfound.forEach(function (res)
-             { 
-                needRepair.push({ node: res.node });
-             });
-
-             if (needRepair.length>0)
-               readRepair(req.params.bucket,req.params.key,first,needRepair);
+               next(err);
+               console.log('get error',err,responses);
            }
+           else
+           {
+              var needRepair= [],
+                  found= _.filter(responses,
+                           function (r) { return !r.notfound; }),
+                  converged= vclock.converge(found,pickVclock,
+                             function (res)
+                             {
+                                 needRepair.push({ node: res.node,
+                                                   meta: res.meta });
+                             });
+
+              if (converged.length==1) // we have a value
+              {
+                 var notfound= _.filter(responses,
+                                 function (r) { return !!r.notfound; });
+
+                 notfound.forEach(function (res)
+                 { 
+                    needRepair.push({ node: res.node });
+                 });
+
+                 if (needRepair.length>0)
+                   readRepair(req.params.bucket,
+                              req.params.key,
+                              converged[0],
+                              needRepair);
+              }
+           }
+
         });
     });
 

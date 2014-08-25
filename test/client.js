@@ -56,4 +56,40 @@ describe('client',function ()
              done(err);
          });
      });
+
+     it('can save buffers',function (done)
+     {
+         var c= client('Duffy'), buff= new Buffer('andrea','utf8');
+
+         c.put('notes','name',buff,null,function (err)
+         {
+             if (err) return done(err);
+
+             c.get('notes','name',function (err, value)
+             {
+                 if (err) return done(err);
+
+                 buff.should.eql(value);
+                 done();
+             });
+         });
+     });  
+
+     it('can save json',function (done)
+     {
+         var c= client('Jeff'), obj= { name: 'Andrea' };
+
+         c.put('notes','obj',obj,null,function (err)
+         {
+             if (err) return done(err);
+
+             c.get('notes','obj',function (err, value)
+             {
+                 if (err) return done(err);
+
+                 obj.should.eql(value);
+                 done();
+             });
+         });
+     });  
 });

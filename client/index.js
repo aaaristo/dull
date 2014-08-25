@@ -26,8 +26,12 @@ module.exports= function (clientProcessId,seed,opts)
                 return _.extend({ 'x-dull-clientid': id },
                                 value ? { 'content-type': value.constructor.name=='Buffer' ? 'application/octet-stream' : 'application/json' } : undefined,
                                 meta.vclock ?
-                                { 'x-dull-vclock': JSON.stringify(meta.vclock) }
+                                { 'x-dull-vclock': meta.vclock }
                                 : undefined);
+             },
+             buildMeta= function (res)
+             {
+                return { vclock: res.headers['x-dull-vclock'] };
              };
 
          client.saveBucket= function (name,opts,cb)
@@ -85,7 +89,7 @@ module.exports= function (clientProcessId,seed,opts)
                   cb(err);
                 else
                 if (res.statusCode!=200)
-                  cb(body);
+                  cb(body,buildMeta(res));
                 else
                   cb();
              });
@@ -97,6 +101,7 @@ module.exports= function (clientProcessId,seed,opts)
             ({ 
                url: 'http://'+node()+'/bucket/'
                     +bucket+'/data/'+key,
+               encoding: null,
                timeout: TIMEOUT
              },
             function (err,res,body)
@@ -104,11 +109,13 @@ module.exports= function (clientProcessId,seed,opts)
                if (err) return cb(err);
 
                if (res.statusCode==200)
-                 cb(null,res.headers['content-type']=='application/json' ?
-                         JSON.parse(body) : body);
+                 cb(null,
+                    res.headers['content-type']=='application/json' ?
+                    JSON.parse(body.toString('utf8')) : body,
+                    buildMeta(res));
                else
                if (res.statusCode==404)
-                 cb({ notfound: true },null);
+                 cb({ notfound: true });
                else
                if (res.statusCode==303)
                {
@@ -140,7 +147,7 @@ module.exports= function (clientProcessId,seed,opts)
                   cb(err);
                 else
                 if (res.statusCode!=200)
-                  cb(body);
+                  cb(body,buildMeta(res));
                 else
                   cb();
              });
