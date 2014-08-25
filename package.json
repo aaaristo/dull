@@ -15,7 +15,7 @@
   ],
   "main": "index.js",
   "bin": {
-    "dull": "./index.js"
+    "dull": "./bin/dull-server.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -30,11 +30,15 @@
     "hashring": "^2.0.1",
     "map-stream": "^0.1.0",
     "mergesort-stream": "0.0.3",
-    "multilevel-http-temp": "0.0.0",
+    "multilevel-http-temp": "0.0.4",
+    "node-uuid": "^1.4.1",
     "optimist": "^0.6.1",
-    "request": "^2.39.0",
-    "underscore": "^1.6.0",
     "pvclock": "0.0.3",
-    "node-uuid": "^1.4.1"
+    "request": "^2.39.0",
+    "rimraf": "^2.2.8",
+    "underscore": "^1.6.0"
+  },
+  "devDependencies": {
+    "chai": "^1.9.1"
   }
 }

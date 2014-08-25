@@ -2,7 +2,10 @@ var mw= require('./middleware'),
     ut= require('./util'),
     async= require('async'),
     multilevel= require('multilevel-http-temp'),
-    _= require('underscore');
+    JSONStream= require('JSONStream'),
+    _= require('underscore'),
+    map=  require('map-stream'),
+    rimraf=  require('rimraf');
 
 module.exports= function (app,node)
 {
@@ -108,7 +111,19 @@ module.exports= function (app,node)
         {
             if (err) return console.log(err);
             umount(bucket);    
+            rimraf.sync(node.path+'/'+bucket); 
         });
+    });
+
+    app.get('/dull/bucket',function (req, res)
+    {
+         bucketsApp.db
+                   .readStream()
+                   .pipe(map(function (data,cb)
+                   {
+                      cb(null,{ name: data.key, opts: ut.json(data.value) });
+                   }))
+                   .pipe(JSONStream.stringify());
     });
 
     app.put('/dull/bucket/:bucket', mw.json, function (req,res)
