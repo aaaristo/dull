@@ -34,7 +34,7 @@ module.exports= function (clientProcessId,seed,opts)
          {
              request.put
              ({ 
-                 url: 'http://'+node()+'/dull/bucket/'+name,
+                 url: 'http://'+node()+'/bucket/'+name,
                 body: JSON.stringify(opts),
              timeout: TIMEOUT 
              },
@@ -54,7 +54,7 @@ module.exports= function (clientProcessId,seed,opts)
          {
              request.del
              ({ 
-                  url: 'http://'+node()+'/dull/bucket/'+name,
+                  url: 'http://'+node()+'/bucket/'+name,
               timeout: TIMEOUT
              },
              function (err, res, body)
@@ -73,7 +73,7 @@ module.exports= function (clientProcessId,seed,opts)
          {
              request.put
              ({ 
-                 url: 'http://'+node()+'/dull/bucket/'
+                 url: 'http://'+node()+'/bucket/'
                       +bucket+'/data/'+key,
              headers: headers(meta,value),
                 body: value.constructor.name=='Buffer' ? value : JSON.stringify(value),
@@ -95,7 +95,7 @@ module.exports= function (clientProcessId,seed,opts)
          {
             request.get
             ({ 
-               url: 'http://'+node()+'/dull/bucket/'
+               url: 'http://'+node()+'/bucket/'
                     +bucket+'/data/'+key,
                timeout: TIMEOUT
              },
@@ -129,7 +129,7 @@ module.exports= function (clientProcessId,seed,opts)
          {
              request.del
              ({ 
-                  url: 'http://'+node()+'/dull/bucket/'
+                  url: 'http://'+node()+'/bucket/'
                                 +bucket+'/data/'+key,
               headers: headers(meta),
               timeout: TIMEOUT
@@ -150,7 +150,7 @@ module.exports= function (clientProcessId,seed,opts)
          {
              return request.stream
              ({
-                uri: 'http://'+node()+'/dull/bucket/'
+                uri: 'http://'+node()+'/bucket/'
                      +bucket+'/keys',
                 qs: opts || {},
                 timeout: TIMEOUT

@@ -115,7 +115,7 @@ module.exports= function (app,node)
         });
     });
 
-    app.get('/dull/bucket',function (req, res)
+    app.get('/bucket',function (req, res)
     {
          bucketsApp.db
                    .readStream()
@@ -126,13 +126,13 @@ module.exports= function (app,node)
                    .pipe(JSONStream.stringify());
     });
 
-    app.put('/dull/bucket/:bucket', mw.json, function (req,res)
+    app.put('/bucket/:bucket', mw.json, function (req,res)
     {
         node.gossip.send('bucket_put',{ name: req.params.bucket, opts: req.json });
         res.end();
     });
 
-    app.delete('/dull/bucket/:bucket', function (req,res)
+    app.delete('/bucket/:bucket', function (req,res)
     {
         node.gossip.send('bucket_delete',req.params.bucket);
         res.end();

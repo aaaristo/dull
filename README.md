@@ -12,17 +12,17 @@ $ mkdir -p data/node1 data/node2 data/node3
 $ dull --port 3001 --path ./data/node1
 $ dull --port 3002 --path ./data/node2 --join 127.0.0.1:3001
 $ dull --port 3003 --path ./data/node3 --join 127.0.0.1:3001
-$ curl -X PUT -d '{ "cap": { "n": 3 }  }' http://localhost:3001/dull/bucket/people
+$ curl -X PUT -d '{ "cap": { "n": 3 }  }' http://localhost:3001/bucket/people
 $ curl http://localhost:3001/buckets/data
-$ curl -X PUT -d '{ "name": "Andrea", "lastname": "Gariboldi", age: 33 }' -H 'Content-Type: application/json' http://localhost:3002/dull/bucket/people/data/andrea
-$ curl http://localhost:3002/dull/bucket/people/data/andrea
-$ curl -X DELETE http://localhost:3002/dull/bucket/people/data/andrea
+$ curl -X PUT -d '{ "name": "Andrea", "lastname": "Gariboldi", age: 33 }' -H 'Content-Type: application/json' http://localhost:3002/bucket/people/data/andrea
+$ curl http://localhost:3002/bucket/people/data/andrea
+$ curl -X DELETE http://localhost:3002/bucket/people/data/andrea
 $ mkdir data/node4
 $ dull --port 3004 --path ./data/node4
 $ curl -X POST -d '127.0.0.1:3001' http://localhost:3004/gossip/join
 $ curl -X DELETE http://localhost:3004/gossip/leave
-$ curl http://localhost:3002/dull/bucket/people/keys
-$ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http://127.0.0.1:3001/dull/bucket/people/data/v8.png
+$ curl http://localhost:3002/bucket/people/keys
+$ curl -X PUT --data-binary @examples/v8.png -H 'Content-Type: image/png' http://127.0.0.1:3001/bucket/people/data/v8.png
 ```
 
 ## CLI arguments
@@ -83,12 +83,12 @@ curl http://<active node>/gossip/nodes
 
 #### create or update bucket and options
 ```
-curl -X PUT -d <bucket options> http://<active node>/dull/bucket/<bucket name>
+curl -X PUT -d <bucket options> http://<active node>/bucket/<bucket name>
 ```
 
 #### delete a bucket
 ```
-curl -X DELETE http://<active node>/dull/bucket/<bucket name>
+curl -X DELETE http://<active node>/bucket/<bucket name>
 ```
 
 #### list buckets
@@ -102,25 +102,25 @@ curl http://<active node>/buckets/values
 
 #### put a KV
 ```
-curl -X PUT -d <value> http://<active node>/dull/bucket/<bucket name>/data/<key>
+curl -X PUT -d <value> http://<active node>/bucket/<bucket name>/data/<key>
 ```
 
 this defaults to Content-Type: application/json. You can put any other value type
 like this:
 
 ```
-curl -X PUT -d <value> -H 'Content-Type: <value type>' http://<active node>/dull/bucket/<bucket name>/data/<key>
+curl -X PUT -d <value> -H 'Content-Type: <value type>' http://<active node>/bucket/<bucket name>/data/<key>
 ```
 
 or
 
 ```
-curl -X PUT --data-binary @<file name> -H 'Content-Type: <value type>' http://127.0.0.1:3001/dull/bucket/<bucket name>/data/<key>
+curl -X PUT --data-binary @<file name> -H 'Content-Type: <value type>' http://127.0.0.1:3001/bucket/<bucket name>/data/<key>
 ```
 
 #### get a value
 ```
-curl -v http://<active node>/dull/bucket/<bucket name>/data/<key>
+curl -v http://<active node>/bucket/<bucket name>/data/<key>
 ```
 
 you will get an header x-dull-vclock like this:
@@ -132,14 +132,14 @@ x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}
 that you should pass back updating a value like this:
 
 ```
-curl -X PUT -d <value> -H 'Content-Type: <value type>' -H 'x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}' http://<active node>/dull/bucket/<bucket name>/data/<key>
+curl -X PUT -d <value> -H 'Content-Type: <value type>' -H 'x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}' http://<active node>/bucket/<bucket name>/data/<key>
 ```
 
 those are used in read-repair.
 
 #### delete a KV
 ```
-curl -X DELETE http://<active node>/dull/bucket/<bucket name>/data/<key>
+curl -X DELETE http://<active node>/bucket/<bucket name>/data/<key>
 ```
 
 you will get an header x-dull-vclock like this:
@@ -151,7 +151,7 @@ x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}
 that you should pass back if you want to recreate the value like this:
 
 ```
-curl -X PUT -d <value> -H 'Content-Type: <value type>' -H 'x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}' http://<active node>/dull/bucket/<bucket name>/data/<key>
+curl -X PUT -d <value> -H 'Content-Type: <value type>' -H 'x-dull-vclock: {"127.0.0.1:3002":2,"127.0.0.1:3001":1}' http://<active node>/bucket/<bucket name>/data/<key>
 ```
 
 Deleted objects are marked with a thumbstone record that may be in conflict with a put
@@ -161,7 +161,7 @@ It will return also keys that has conflicts, so that the client may have the cha
 
 #### list all keys known to dull
 ```
-curl http://<active node>/dull/bucket/<bucket name>/keys
+curl http://<active node>/bucket/<bucket name>/keys
 ```
 
 ### custom http headers

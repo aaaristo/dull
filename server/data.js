@@ -100,7 +100,7 @@ module.exports= function (app,node,argv)
             });
         };
 
-    app.put('/dull/bucket/:bucket/data/:key',
+    app.put('/bucket/:bucket/data/:key',
     node.buckets.get,
     mw.binary,
     mw.client,
@@ -141,7 +141,7 @@ module.exports= function (app,node,argv)
               });
     });
 
-    app.get('/dull/bucket/:bucket/data/:key',
+    app.get('/bucket/:bucket/data/:key',
     node.buckets.get,
     function (req, res, next)
     {
@@ -248,7 +248,7 @@ module.exports= function (app,node,argv)
         });
     });
 
-    app.delete('/dull/bucket/:bucket/data/:key',
+    app.delete('/bucket/:bucket/data/:key',
     node.buckets.get,
     mw.client,
     function (req,res)
@@ -280,7 +280,7 @@ module.exports= function (app,node,argv)
               });
     });
 
-    app.get('/dull/bucket/:bucket/keys', 
+    app.get('/bucket/:bucket/keys', 
     node.buckets.get,
     function (req, res, next)
     {
