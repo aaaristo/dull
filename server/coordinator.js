@@ -20,7 +20,9 @@ const LC= '\xff',  // last character
           {
              iterator(node,function (err)
              {
-                errors.push({ node: node, err: err });
+                if (err)
+                  errors.push({ node: node, err: err });
+
                 done();
              });
           },

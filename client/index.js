@@ -14,15 +14,6 @@ module.exports= function (clientProcessId,seed,opts)
          node= function ()
          {
             return gossip.rnodes()[0] || seed;
-         },
-         siblings= function (parts)
-         {
-            return _.collect(parts,function (p)
-            {
-                var json= p.headers['content-type']=='application/json';
-                return { meta: { vclock: JSON.parse(p.headers['x-dull-vclock']) }, 
-                      content: json ? JSON.parse(p.body) : p.body };
-            });
          };
 
      // gossip.join(seed);
@@ -42,7 +33,18 @@ module.exports= function (clientProcessId,seed,opts)
              },
              buildMeta= function (res)
              {
-                return { vclock: res.headers['x-dull-vclock'] };
+                return _.extend({ vclock: res.headers['x-dull-vclock'] },
+                       res.headers['x-dull-thumbstone'] ? { thumbstone: true }
+                                                        : undefined);
+             },
+             siblings= function (parts)
+             {
+                return _.collect(parts,function (p)
+                {
+                    var json= p.headers['content-type']=='application/json';
+                    return { meta: buildMeta(p), 
+                          content: json ? JSON.parse(p.body) : p.body };
+                });
              };
 
          client.saveBucket= function (name,opts,cb)
@@ -126,7 +128,7 @@ module.exports= function (clientProcessId,seed,opts)
                     buildMeta(res));
                else
                if (res.statusCode==404)
-                 cb({ notfound: true });
+                 cb({ notfound: true },undefined,buildMeta(res));
                else
                if (res.statusCode==300)
                {
@@ -134,7 +136,12 @@ module.exports= function (clientProcessId,seed,opts)
                                        : undefined;
 
                  if (resolved!==undefined)
-                   cb(null,resolved,buildMeta(res));
+                 {
+                   if (resolved===null)
+                     cb({ notfound: true },null,buildMeta(res));
+                   else
+                     cb(null,resolved,buildMeta(res));
+                 }
                  else
                    cb(new Error('Cannot resolve siblings'));
                }

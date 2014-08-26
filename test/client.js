@@ -54,7 +54,48 @@ describe('client',function ()
      {
          client('Alice').del('notes','basic',null,function (err)
          {
-             done(err);
+             if (err) return done(err);
+
+             var del= false;
+
+             client('Alice').get('notes','basic',function (err,value,meta)
+             {
+                 if (err)
+                 {
+                    if (err.notfound)
+                    {
+                      del.should.equal(true);
+
+                      client('Alice').del('notes','basic',meta,
+                      function (err,meta)
+                      {
+                         if (err) return done(err);
+
+                         client('Alice').get('notes','basic',
+                         function (err,value,meta)
+                         {
+                             if (err.notfound) return done();
+
+                             done(err || 'found');  
+                         });
+                      });
+                    }
+                    else 
+                      done(err);
+                 }
+                 else
+                    done(new Error('found'));
+             },
+             function (siblings)
+             {
+                 // resolve to deleted
+                 siblings.length.should.equal(2);
+                 _.pluck(siblings,'content').should.contain('Wednesday');
+                 _.collect(siblings,function (s) { return s.meta.thumbstone; })
+                  .should.contain(true);
+                 del= true;
+                 return null;
+             });
          });
      });
 

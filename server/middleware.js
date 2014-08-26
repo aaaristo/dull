@@ -45,16 +45,12 @@ exports.binary= function (req,res,next)
 
 exports.client= function (req, res, next)
 {
-    console.log(req.headers);
-
     req.client= {
                     id: req.headers['x-dull-clientid'] ? 
                         req.headers['x-dull-clientid'] : uuid(),
                 vclock: req.headers['x-dull-vclock'] ? 
                         JSON.parse(req.headers['x-dull-vclock']) : {}
                 };
-
-    console.log(req.client);
 
     next();
 };

@@ -204,6 +204,8 @@ module.exports= function (app,node,argv)
         },
         function (err, responses) // n nodes responded
         {
+console.log('QUI');
+
            if (err)
            {
                next(err);
