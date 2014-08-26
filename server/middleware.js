@@ -1,3 +1,5 @@
+var uuid= require('node-uuid').v4;
+
 exports.text= function (req,res,next)
 {
     req.text = '';
