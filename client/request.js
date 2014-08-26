@@ -1,3 +1,5 @@
+// @see https://github.com/alessioalex/multilevel-http/blob/master/lib/request.js
+
 var request = require('request'),
     through = require('through')
 
