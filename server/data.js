@@ -8,7 +8,7 @@ var mw= require('./middleware'),
 
 module.exports= function (app,node,argv)
 {
-    var sibOpts= { timeout: argv.node_timeout || 1000 },
+    var sibOpts= { timeout: argv.timeout || 1000 },
         sib= require('./sibling')(sibOpts),
         coord= require('./coordinator')(node,sibOpts),
         vclock= require('pvclock')(argv.vclock),
