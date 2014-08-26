@@ -153,6 +153,8 @@ module.exports= function (app,node,argv)
                    }
                    else
                    {
+                       res.setHeader('content-type','application/json');
+
                        _.keys(first.meta.headers).forEach(function (name)
                        {
                            res.setHeader(name,first.meta.headers[name]);
@@ -173,6 +175,8 @@ module.exports= function (app,node,argv)
                    converged.forEach(function (response)
                    {
                       vclocks.push(response.meta.vclock);
+
+                      response.meta.headers= response.meta.headers || {};
 
                       parts.push
                       ({

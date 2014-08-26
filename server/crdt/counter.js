@@ -144,8 +144,7 @@ module.exports= function (app,node,argv)
     function (req,res,next)
     {
         var siblingId= uuid(),
-            vc= vclock.increment(req.client.vclock,
-                                 req.client.id),
+            vc= vclock.increment({},req.client.id),
             counter= pncounter.increment(pncounter(),
                                          req.client.id,req.number),
             meta= JSON.stringify
@@ -153,7 +152,7 @@ module.exports= function (app,node,argv)
                             key: req.params.key,
                       siblingId: siblingId,
                          vclock: vc,
-                        counter: counter 
+                        counter: counter
                   });
 
         coord.batch(req.bucket,req.params.key)
@@ -196,6 +195,8 @@ module.exports= function (app,node,argv)
                    }
                    else
                    {
+                       res.setHeader('content-type','application/json');
+
                        _.keys(first.meta.headers).forEach(function (name)
                        {
                            res.setHeader(name,first.meta.headers[name]);

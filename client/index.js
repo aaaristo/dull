@@ -183,6 +183,70 @@ module.exports= function (clientProcessId,seed,opts)
              .pipe(JSONStream.parse());
          };
 
+         client.inc= function (bucket,key,value,cb)
+         {
+             request.put
+             ({ 
+                 url: 'http://'+node()+'/counter/'
+                      +bucket+'/data/'+key,
+             headers: headers({},value),
+                body: ''+value,
+             timeout: TIMEOUT 
+             },
+             function (err, res, body)
+             {
+                if (err)
+                  cb(err);
+                else
+                if (res.statusCode!=200)
+                  cb(body);
+                else
+                  cb(null,buildMeta(res));
+             });
+         };
+
+         client.counter= function (bucket,key,cb,resolve)
+         {
+            request.get
+            ({ 
+               url: 'http://'+node()+'/counter/'
+                    +bucket+'/data/'+key,
+               encoding: null,
+               timeout: TIMEOUT
+             },
+            function (err,res,body)
+            {
+               if (err) return cb(err);
+
+               if (res.statusCode==200)
+                 cb(null,
+                    JSON.parse(body.toString('utf8')),
+                    buildMeta(res));
+               else
+               if (res.statusCode==404)
+                 cb({ notfound: true },undefined,buildMeta(res));
+               else
+               if (res.statusCode==300)
+               {
+                 var resolved= resolve ? resolve(siblings(ut.multipart(res,body)))
+                                       : undefined;
+
+                 if (resolved!==undefined)
+                 {
+                   if (resolved===null)
+                     cb({ notfound: true },null,buildMeta(res));
+                   else
+                     cb(null,resolved,buildMeta(res));
+                 }
+                 else
+                   cb(new Error('Cannot resolve siblings'));
+               }
+               else
+                 cb(body.toString('utf8'));
+            });
+         };
+
+
          return client;
      };
 };

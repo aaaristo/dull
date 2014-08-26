@@ -202,4 +202,28 @@ describe('client',function ()
              });
          });
      });
+
+     it('can increment counters',function (done)
+     {
+           client('Albert').inc('notes','cnt',3,
+           function (err,meta)
+           {
+               if (err) return done(err);
+
+               client('John').inc('notes','cnt',-2,
+               function (err,meta)
+               {
+                   if (err) return done(err);
+
+                   client('Mary').counter('notes','cnt',
+                   function (err,value,meta)
+                   {
+                       if (err) return done(err);
+
+                       value.should.equal(1);
+                       done();
+                   });
+               });
+           });
+     });
 });
