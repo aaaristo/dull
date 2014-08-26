@@ -165,6 +165,16 @@ It will return also keys that has conflicts, so that the client may have the cha
 curl http://<active node>/bucket/<bucket name>/keys
 ```
 
+#### increment/decrement a pn-counter
+```
+curl -X PUT -d <n> http://<active node>/counter/<bucket name>/data/<key>
+```
+
+#### get the counter value
+```
+curl http://<active node>/counter/<bucket name>/data/<key>
+```
+
 ### custom http headers
 
 #### x-dull-clientid
