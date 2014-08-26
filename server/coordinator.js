@@ -23,6 +23,7 @@ const LC= '\xff',  // last character
                 if (err)
                   errors.push({ node: node, err: err });
 
+                finish();
                 done();
              });
           },

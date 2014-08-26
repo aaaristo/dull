@@ -64,13 +64,13 @@ module.exports= function (app,node,argv)
             async.forEach(siblings,
             function (sibling,done)
             {
-                var batch= sib.batch(sibling.node,bucket)
+                var batch= sib.batch(bucket)
                               .put(key,res.meta.siblingId,meta,res.content);
 
                 if (sibling.meta)
                   batch.del(key,sibling.meta.siblingId);
 
-                batch.perform(function (err)
+                batch.perform(sibling.node,function (err)
                 {
                    if (err)
                      console.log('read repair','cannot repair',
@@ -204,8 +204,6 @@ module.exports= function (app,node,argv)
         },
         function (err, responses) // n nodes responded
         {
-console.log('QUI');
-
            if (err)
            {
                next(err);

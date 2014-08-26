@@ -33,7 +33,7 @@
     "multilevel-http-temp": "0.0.4",
     "node-uuid": "^1.4.1",
     "optimist": "^0.6.1",
-    "pvclock": "0.0.3",
+    "pvclock": "0.0.8",
     "request": "^2.39.0",
     "rimraf": "^2.2.8",
     "underscore": "^1.6.0"

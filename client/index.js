@@ -2,18 +2,18 @@ var request= require('request'),
     lrequest= require('./request')(),
     ut= require('./util'),
     JSONStream= require('JSONStream'),
-    _= require('underscore'),
-    swim= require('express-swim');
+    _= require('underscore');
+    //swim= require('express-swim');
 
 module.exports= function (clientProcessId,seed,opts)
 {
      opts= opts || {};
 
      var TIMEOUT= opts.timeout || 1000,
-         gossip= swim(clientProcessId,{ base: '/gossip', client: true }).swim,
+//         gossip= swim(clientProcessId,{ base: '/gossip', client: true }).swim,
          node= function ()
          {
-            return gossip.rnodes()[0] || seed;
+            return seed; //gossip.rnodes()[0] || seed;
          };
 
      // gossip.join(seed);
