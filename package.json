@@ -1,6 +1,6 @@
 {
   "name": "dull",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Playing around to build a riak-like distributed leveldb",
   "keywords": [
     "database",
