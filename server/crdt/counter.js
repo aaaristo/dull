@@ -1,46 +1,73 @@
-var mw= require('./middleware'),
-    ut= require('./util'),
+var mw= require('../middleware'),
+    ut= require('../util'),
     _= require('underscore'),
     async= require('async'),
-    stream= require('stream'),
     uuid= require('node-uuid').v4,
-    multilevel= require('multilevel-http-temp'),
-    merge= require('mergesort-stream'),
     JSONStream= require('JSONStream'),
     map=  require('map-stream'),
     pncounter= require('converge')('pn-counter');
 
-const KS= '::',                   // key separator
-      LC= '\xff';                 // last character
-
 module.exports= function (app,node,argv)
 {
-    var TIMEOUT= argv.node_timeout || 1000,
+    var sibOpts= { timeout: argv.node_timeout || 1000 },
+        sib= require('../sibling')(sibOpts),
+        coord= require('../coordinator')(node,sibOpts),
         vclock= require('pvclock')(argv.vclock),
-        vclockDesc= function (a,b) { return vclock.desc(a.meta.vclock,b.meta.vclock); },
-        compareKeys= function (meta1, meta2)
+        convergeCounters= function (converged)
         {
-              if (meta1.key > meta2.key) return 1;
-              else if (meta1.key < meta2.key) return -1;
-              return 0;
+            var some= false;
+
+            if (converged.every(function (res)
+                {
+                    return res.meta ? (res.meta.thumbstone 
+                                       ? some= true : false)
+                                    : false;
+                }))
+            {
+                var res= { meta: { thumbstone: true } };
+
+                res.meta.vclock= vclock.merge(_.collect(converged,
+                                              function (r)
+                                              {
+                                                 return r.meta ? r.meta.vclock
+                                                               : {};
+                                              }));
+
+                return [res];
+            }
+            else
+            if (some)
+                return converged;
+            else
+            {
+                var res= { meta: {} };
+
+                res.meta.vclock= vclock.merge(_.collect(converged,
+                                              function (r)
+                                              {
+                                                 return r.meta ? r.meta.vclock
+                                                               : {};
+                                              }));
+
+                res.meta.counter= pncounter.merge(_.collect(converged,
+                                              function (r)
+                                              {
+                                                 return r.meta ? r.meta.counter
+                                                               : pncounter();
+                                              }));
+
+                res.content= ''+pncounter.value(res.meta.counter);
+
+                return [res];
+            }
+        },
+        pickVclock= function (res)
+        {
+           return res.meta.vclock;
         },
         unique= function ()
         {
-           var last, metas= [],
-               resolveVclock= function (metas)
-               {
-                   metas.sort(function (a,b) { return vclock.desc(a.vclock,b.vclock); });
-
-                   var first= metas.shift(), resolved = first ? [first] : [];
-
-                   metas.forEach(function (meta)
-                   {
-                      if (vclock.compare(first.vclock, meta.vclock) == vclock.DIFFERENT)
-                        resolved.push(meta);
-                   });
-
-                   return resolved; 
-               };
+           var last, metas= [];
 
            return map(function (meta, cb)
            {
@@ -52,12 +79,14 @@ module.exports= function (app,node,argv)
                 }   
                 else
                 {
-                   var resolved= resolveVclock(metas), first= resolved[0];
+                   var converged= vclock.converge(metas,'vclock'),
+                       first= converged[0];
 
+                   metas= [];
                    metas.push(meta);
                    last= meta;
 
-                   if (resolved.length>1) // conflicts
+                   if (converged.length>1) // conflicts
                      cb(null, first.key);
                    else
                    if (first.thumbstone) // deleted
@@ -84,44 +113,20 @@ module.exports= function (app,node,argv)
             async.forEach(siblings,
             function (sibling,done)
             {
-                var ops= [{ // key
-                              key: ['K',key,res.meta.siblingId].join(KS),
-                            value: meta,
-                             type: 'put'
-                          },
-                          { // value meta 
-                              key: ['V',key,res.meta.siblingId,'M'].join(KS),
-                            value: meta,
-                             type: 'put'
-                          },
-                          { // value content
-                              key: ['V',key,res.meta.siblingId,'C'].join(KS),
-                            value: res.content,
-                             type: 'put'
-                          }];
+                var batch= sib.batch(bucket)
+                              .put(key,res.meta.siblingId,meta,res.content);
 
                 if (sibling.meta)
-                  ops.push.apply(ops,
-                   [{ // key
-                          key: ['K',key,sibling.meta.siblingId].join(KS),
-                         type: 'del'
-                    },
-                    { // sibling meta
-                          key: ['V',key,sibling.meta.siblingId,'M'].join(KS),
-                         type: 'del'
-                    },
-                    { // sibling content
-                          key: ['V',key,sibling.meta.siblingId,'C'].join(KS),
-                         type: 'del'
-                    }]);
+                  batch.del(key,sibling.meta.siblingId);
 
-                multilevel.client('http://'+sibling.node+'/mnt/'+bucket+'/',{ timeout: TIMEOUT }).batch(ops,
-                function (err,res)
+                batch.perform(sibling.node,function (err)
                 {
                    if (err)
-                     console.log('read repair','cannot repair',node.string,bucket,key,err);
+                     console.log('read repair','cannot repair',
+                                 sibling.node,bucket,key,err);
                    else
-                     console.log('read repair','repaired',node.string,bucket,key);
+                     console.log('read repair','repaired',
+                                 sibling.node,bucket,key);
 
                    done();
                 });
@@ -132,221 +137,139 @@ module.exports= function (app,node,argv)
             });
         };
 
-    app.put('/dull/counter/:bucket/data/:key', node.buckets.get, mw.binary, function (req,res)
+    app.put('/counter/:bucket/data/:key',
+    node.buckets.get,
+    mw.number,
+    mw.client,
+    function (req,res,next)
     {
-        var n= req.bucket.opts.cap.n || node.cap.n,
-            w= req.query.w || node.cap.w,
-            nodes= node.ring.range(req.params.key,n),
-            val= JSON.parse(mv.binary.toString('utf8')),
-            errors= [],
-            siblingId= uuid(),
-            client= {
-                       id: req.headers['x-dull-clientid'] ? req.headers['x-dull-clientid'] : uuid(),
-                    },
-            success= _.after(w,_.once(function ()
-                     {
-                         res.end();
-                     }));
+        var siblingId= uuid(),
+            vc= vclock.increment(req.client.vclock,
+                                 req.client.id),
+            counter= pncounter.increment(pncounter(),
+                                         req.client.id,req.number),
+            meta= JSON.stringify
+                  ({ 
+                            key: req.params.key,
+                      siblingId: siblingId,
+                         vclock: vc,
+                        counter: counter 
+                  });
 
-        if (typeof val!='number'||val===0)
-          res.status(400).send('the cluster has n='+n+' you cannot specify a greater w. ('+w+')');
-        else
-        if (n < w)
-          res.status(500).send('the cluster has n='+n+' you cannot specify a greater w. ('+w+')');
-        else
-        if (nodes.length < w)
-          res.status(500).send('we have only '+nodes.length+' nodes active, and you specified w='+w);
-        else
-        async.forEach(nodes,
-        function (node,done)
-        {
-            var meta= JSON.stringify
-                       ({ 
-                                key: req.params.key,
-                          siblingId: siblingId,
-                            headers: _.defaults(_.pick(req.headers,['content-type','content-length']),
-                                     { 
-                                        'content-type': 'application/json',
-                                        'content-length': req.binary.length
-                                     })
-                       });
-
-            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/',{ timeout: TIMEOUT })
-            .batch([{ // key
-                          key: ['K',req.params.key,siblingId].join(KS),
-                        value: meta,
-                         type: 'put'
-                    },
-                    { // value meta 
-                          key: ['V',req.params.key,siblingId,'M'].join(KS),
-                        value: meta,
-                         type: 'put'
-                    },
-                    { // value content
-                          key: ['V',req.params.key,siblingId,'C'].join(KS),
-                        value: pncounter.increment(pncounter(),client.id,val),
-                         type: 'put' 
-                    }],
-            function (err,res)
-            {
-               if (err)
-                 errors.push({ node: node, err: err, statusCode: res.statusCode });
-               else
-                 success();
-
-               done();
-            });
-        },
-        function ()
-        {
-           if (errors.length > (n-w) || errors.length == nodes.length)
-             res.send(500,errors);
-           else
-             console.log('put success'); 
-        });
+        coord.batch(req.bucket,req.params.key)
+             .put(siblingId,meta,pncounter.value(counter))
+             .perform(req.params.w,
+              function () // w nodes
+              {
+                 res.setHeader('x-dull-vclock',JSON.stringify(vc));
+                 res.end();
+              },
+              function (err,errors) // n nodes
+              {
+                 if (err)
+                 {
+                   next(err);
+                   console.log('put error',err,errors);
+                 }
+              });
     });
 
-    app.get('/dull/bucket/:bucket/data/:key', node.buckets.get, function (req, res)
+    app.get('/counter/:bucket/data/:key',
+    node.buckets.get,
+    function (req, res, next)
     {
-        var n= req.bucket.opts.cap.n || node.cap.n,
-            r= req.query.r || node.cap.r,
-            nodes= node.ring.range(req.params.key,n),
-            errors= [],
-            responses= [],
-            success= _.after(r,_.once(function () // after r replicas respond, return to the client
-                     {
-                           var found= _.filter(responses,function (r) { return !r.notfound; });
-                           found.sort(vclockDesc);
+        var buildResponse= function (converged)
+            {
+               var first= converged[0];
 
-                           var first= found.shift(), repaired = first ? [first] : [];
+               if (converged.length==0)
+                 res.status(404).send('Key not found');
+               else
+               if (converged.length==1)
+               {
+                   if (first.meta.thumbstone) // has been deleted
+                   {
+                       res.status(404);
+                       res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock)); // if you want to recreate it better to use the vclock
+                       res.setHeader('x-dull-thumbstone', 'true');
+                       res.send('Key not found');
+                   }
+                   else
+                   {
+                       _.keys(first.meta.headers).forEach(function (name)
+                       {
+                           res.setHeader(name,first.meta.headers[name]);
+                       });
 
-                           found.forEach(function (response, index)
-                           {
-                              if (vclock.compare(first.meta.vclock, response.meta.vclock) == vclock.DIFFERENT)
-                                repaired.push(response);
-                           });
+                       res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
 
-                           
-                           if (repaired.length==0)
-                             res.status(404).send('Key not found');
-                           else
-                           if (repaired.length==1)
-                           {
-                               if (first.meta.thumbstone) // has been deleted
-                               {
-                                   res.status(404);
-                                   res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock)); // if you want to recreate it better to use the vclock
-                                   res.send('Key not found');
-                               }
-                               else
-                               {
-                                   _.keys(first.meta.headers).forEach(function (name)
-                                   {
-                                       res.setHeader(name,first.meta.headers[name]);
-                                   });
+                       if (first.meta.headers&&first.meta.headers['content-type']!='application/json')
+                         res.end(new Buffer(first.content,'base64'));
+                       else
+                         res.end(first.content);
+                   }
+               }
+               else
+               { 
+                   var parts= [], vclocks= [];
 
-                                   res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
+                   converged.forEach(function (response)
+                   {
+                      vclocks.push(response.meta.vclock);
 
-                                   if (first.meta.headers['content-type']=='application/json')
-                                     res.end(first.content);
-                                   else
-                                     res.end(new Buffer(first.content,'base64'));
-                               }
-                           }
-                           else
-                           { 
-                               var parts= [], vclocks= [];
+                      parts.push
+                      ({
+                          headers: response.meta.thumbstone ?
+                                    { 'x-dull-vclock': JSON.stringify(response.meta.vclock),
+                                      'x-dull-thumbstone': 'true' } :
+                                            _.extend(response.meta.headers,
+                                                { 'x-dull-vclock': JSON.stringify(response.meta.vclock) },
+                                                response.meta.headers['content-type']!='application/json' ? 
+                                                { 'Content-Transfer-Encoding': 'base64' } : undefined),
+                          body: response.content
+                      });
+                   });
 
-                               repaired.forEach(function (response)
-                               {
-                                  vclocks.push(response.meta.vclock);
+                   res.status(300);
+                   res.setHeader('x-dull-vclock', JSON.stringify(vclock.merge(vclocks)));
+                   ut.multipart(res,parts);
+               }
+            };
 
-                                  parts.push
-                                  ({
-                                      headers: response.meta.thumbstone ?
-                                                { 'x-dull-vclock': JSON.stringify(response.meta.vclock),
-                                                  'x-dull-thumbstone': 'true' } :
-                                                        _.extend(response.meta.headers,
-                                                            { 'x-dull-vclock': JSON.stringify(response.meta.vclock) },
-                                                            response.meta.headers['content-type']!='application/json' ? 
-                                                            { 'Content-Transfer-Encoding': 'base64' } : undefined),
-                                      body: response.content
-                                  });
-                               });
-
-                               res.status(300);
-                               res.setHeader('x-dull-vclock', JSON.stringify(vclock.merge(vclocks)));
-                               ut.multipart(res,parts);
-                           }
-                     }));
-
-        if (n < r)
-          res.status(500).send('the cluster has n='+n+' you cannot specify a greater r. ('+r+')');
-        else
-        if (nodes.length < r)
-          res.status(500).send('we have only '+nodes.length+' nodes active, and you specified r='+r);
-        else
-        async.forEach(nodes,
-        function (node,done)
+        coord.list(req.params.r,
+                   req.bucket,
+                   req.params.key,
+        function (responses) // r nodes responded
         {
-            var parts= [];
-                console.log(node);
+           var found= _.filter(responses,function (r) { return !r.notfound; });
 
-            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/',{ timeout: TIMEOUT })
-            .valueStream({ start: ['V',req.params.key,''].join(KS),
-                             end: ['V',req.params.key,LC].join(KS) })
-            .on('error', function (err)
-            {
-                errors.push({ node: node, err: err });
-            })
-            .on('data', function (data)
-            {
-                parts.push(data); 
-            })
-            .on('end', function ()
-            {
-                if (parts.length<2)
-                    responses.push({ node: node, notfound: true });
-                else
-                    for (var n=0;n<parts.length;n+=2)
-                    {
-                        var meta= JSON.parse(parts[n+1]);
-                        responses.push({ node: node, meta: meta, content: parts[n] });
-                    }
-
-                success();
-                done();
-            });
+           buildResponse(convergeCounters(vclock.converge(found,pickVclock)));
         },
-        function ()
+        function (err, responses) // n nodes responded
         {
-           if (errors.length > (n-r) || errors.length == nodes.length)
-             res.send(500,errors);
-           else
-           if (responses.length<r)
-             res.status(206).send('Only '+responses.length+' replicas responded with a value, you specified r='+r);
+           if (err)
+           {
+               next(err);
+               console.log('get error',err,responses);
+           }
            else
            {
-               // we might have more responses so lets re-resolve vclocks
-               var found= _.filter(responses,function (r) { return !r.notfound; });
-               found.sort(vclockDesc); 
+              var needRepair= [],
+                  found= _.filter(responses,
+                           function (r) { return !r.notfound; }),
+                  converged= vclock.converge(found,pickVclock,
+                             function (res)
+                             {
+                                 needRepair.push({ node: res.node,
+                                                   meta: res.meta });
+                             });
 
-               var first= found.shift(), repaired = first ? [first] : [], needRepair= [];
+              converged= convergeCounters(converged);
 
-               found.forEach(function (response, index)
-               {
-                  var cmp= vclock.compare(first.meta.vclock, response.meta.vclock); 
-
-                  if (cmp==vclock.DIFFERENT)
-                    repaired.push(response);
-                  else                  
-                  if (cmp==1)
-                    needRepair.push({ node: response.node, meta: response.meta });
-               });
-
-               if (repaired.length==1) // we have a value
-               {
-                 var notfound= _.filter(responses,function (r) { return !!r.notfound; });
+              if (converged.length==1) // we have a value
+              {
+                 var notfound= _.filter(responses,
+                                 function (r) { return !!r.notfound; });
 
                  notfound.forEach(function (res)
                  { 
@@ -354,122 +277,57 @@ module.exports= function (app,node,argv)
                  });
 
                  if (needRepair.length>0)
-                   readRepair(req.params.bucket,req.params.key,first,needRepair);
-               }
+                   readRepair(req.params.bucket,
+                              req.params.key,
+                              converged[0],
+                              needRepair);
+              }
            }
+
         });
     });
 
-    app.delete('/dull/bucket/:bucket/data/:key', node.buckets.get, function (req,res)
+    app.delete('/counter/:bucket/data/:key',
+    node.buckets.get,
+    mw.client,
+    function (req,res)
     {
-        var n= req.bucket.opts.cap.n || node.cap.n,
-            w= req.query.w || node.cap.w,
-            nodes= node.ring.nodes(), // we may have keys on any server if the hashring changed
-            errors= [],
-            siblingId= uuid(),
-            client= {
-                       id: req.headers['x-dull-clientid'] ? req.headers['x-dull-clientid'] : uuid(),
-                       vclock: req.headers['x-dull-vclock'] ? JSON.parse(req.headers['x-dull-vclock']) : {}
-                    },
-            success= _.after(w,_.once(function ()
-                     {
-                         res.end();
-                     }));
-
-        if (n < w)
-          res.status(500).send('the cluster has n='+n+' you cannot specify a greater w. ('+w+')');
-        else
-        if (nodes.length < w)
-          res.status(500).send('we have only '+nodes.length+' nodes active, and you specified w='+w);
-        else
-        async.forEach(nodes,
-        function (node,done)
-        {
-            var meta= JSON.stringify
-                      ({
-                                key: req.params.key,
-                          siblingId: siblingId,
-                             vclock: vclock.increment(client.vclock,client.id),
-                         thumbstone: true
-                      });
-
-            multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/',{ timeout: TIMEOUT })
-            .batch([{ // key
-                          key: ['K',req.params.key,siblingId].join(KS),
-                        value: meta,
-                         type: 'put'
-                    },
-                    { // value meta 
-                          key: ['V',req.params.key,siblingId,'M'].join(KS),
-                        value: meta,
-                         type: 'put'
-                    },
-                    { // value content
-                          key: ['V',req.params.key,siblingId,'C'].join(KS),
-                        value: '#',
-                         type: 'put' 
-                    }],
-            function (err,res)
-            {
-               if (err)
-                 errors.push({ node: node, err: err, statusCode: res.statusCode });
-               else
-                 success();
-
-               done();
-            });
-        },
-        function ()
-        {
-           if (errors.length > (n-w) || errors.length == nodes.length)
-             res.send(500,errors);
-           else
-             console.log('del success'); 
-        });
-
+        var siblingId= uuid(),
+            vc= vclock.increment(req.client.vclock,
+                                 req.client.id),
+            meta= JSON.stringify
+                  ({
+                            key: req.params.key,
+                      siblingId: siblingId,
+                         vclock: vc,
+                     thumbstone: true
+                  });
+            
+        coord.batch(req.bucket,req.params.key)
+             .put(siblingId,meta,'#')
+             .perform(req.params.w,
+              function () // w nodes
+              {
+                 res.setHeader('x-dull-vclock',JSON.stringify(vc));
+                 res.end();
+              },
+              function (err,errors) // all nodes
+              {
+                 if (err)
+                 {
+                   next(err);
+                   console.log('put error',err,errors);
+                 }
+              });
     });
 
-    app.get('/dull/bucket/:bucket/keys', function (req, res, next)
+    app.get('/bucket/:bucket/keys', 
+    node.buckets.get,
+    function (req, res, next)
     {
-        var streams= [];
+        res.type('json');
 
-        async.forEach(node.ring.nodes(),
-        function (node,done)
-        {
-            var stream= multilevel.client('http://'+node+'/mnt/'+req.params.bucket+'/',{ timeout: TIMEOUT })
-                                  .valueStream({ start: ['K',''].join(KS),
-                                                   end: ['K',LC].join(KS) })
-                                  .pipe(JSONStream.parse());
-
-            stream.node= node;
-            streams.push(stream);
-
-            done();
-        },
-        function ()
-        {
-           streams.forEach(function (stream)
-           {
-                stream.on('error', function (err)
-                {
-                    console.log('keys',req.params.bucket,stream.node,err);
-                    stream.emit('end'); // if a node is failing we may get the keys from other nodes anyway, so lets try to go on.
-                                        // check if fails >= n ? the failed nodes may be from different partitions..
-                });
-           });
-
-           var endstream = new stream.Stream()
-           endstream.readable = true;
-           streams.push(endstream);
-
-           var merged= merge(compareKeys,streams);
-
-           endstream.emit('data',{ key: LC });
-           endstream.emit('end');
-
-           res.type('json');
-
-           merged
+        coord.keys(req.bucket)
              .on('error',function (err)
              {
                 next(err);
@@ -477,6 +335,5 @@ module.exports= function (app,node,argv)
              .pipe(unique())
              .pipe(JSONStream.stringify())
              .pipe(res);
-        });
     });
 };

@@ -160,10 +160,10 @@ module.exports= function (app,node,argv)
 
                        res.setHeader('x-dull-vclock', JSON.stringify(first.meta.vclock));
 
-                       if (first.meta.headers['content-type']=='application/json')
-                         res.end(first.content);
-                       else
+                       if (first.meta.headers&&first.meta.headers['content-type']!='application/json')
                          res.end(new Buffer(first.content,'base64'));
+                       else
+                         res.end(first.content);
                    }
                }
                else

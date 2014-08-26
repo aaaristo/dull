@@ -45,6 +45,23 @@ exports.binary= function (req,res,next)
     });
 };
 
+exports.number= function (req,res,next)
+{
+    req.number= '';
+
+    req.on('data', function(chunk){ req.number+=chunk; });
+    req.on('end', function ()
+    { 
+          if (isNaN(req.number))
+            res.status(400).send('You should send a number');
+          else
+          {
+            req.number= Number(req.number);
+            next(); 
+          }
+    });
+};
+
 exports.client= function (req, res, next)
 {
     req.client= {

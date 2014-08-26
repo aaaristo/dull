@@ -25,6 +25,7 @@
   "dependencies": {
     "JSONStream": "^0.9.0",
     "async": "^0.9.0",
+    "converge": "0.0.2",
     "express": "^4.8.3",
     "express-swim": "0.0.13",
     "hashring": "^2.0.1",

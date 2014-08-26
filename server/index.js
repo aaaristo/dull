@@ -24,7 +24,7 @@ module.exports= function (argv)
     require('./ring')(app,node,_.extend(argv.ring || {},{ replicas: cap.n }));
     require('./buckets')(app,node);
     require('./data')(app,node,argv);
-    //require('./crdt')(app,node);
+    require('./crdt')(app,node,argv);
 
     app.node= node;
 
